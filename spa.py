@@ -30,10 +30,6 @@ if "logged_in" not in st.session_state:
 if "current_role" not in st.session_state:
     st.session_state.current_role = "Khách Hàng"
 
-# Khởi tạo lưu trữ ngày đang chọn cho giao diện Mobile
-if "mobile_selected_date" not in st.session_state:
-    st.session_state.mobile_selected_date = None
-
 DUY_NHAT_SERVICE = "Chăm sóc da mặt chuyên sâu"
 
 # --- THANH MENU ĐIỀU HƯỚNG TRÊN CÙNG TRANG WEB ---
@@ -148,13 +144,14 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                                 c3.code(msg, language="text")
 
 # -------------------------------------------------------------------------
-# PHẦN B: GIAO DIỆN KHÁCH HÀNG (THIẾT KẾ ĐA NỀN TẢNG PC + MOBILE)
+# PHẦN B: GIAO DIỆN KHÁCH HÀNG (BẢNG LỊCH THÁNG CO GIÃN THÔNG MINH)
 # -------------------------------------------------------------------------
 else:
+    from streamlit_calendar import calendar
+
     st.subheader("✨ Đặt lịch hẹn Spa trực tuyến")
     
     if supabase:
-        # Tải danh sách các slot còn trống
         slot_res = supabase.table("slots").select("*").eq("status", "available").order("start_time").execute()
         available_slots = slot_res.data if slot_res.data else []
         
@@ -162,88 +159,76 @@ else:
             st.warning("Hiện tại Spa đã kín lịch hoặc chưa mở thêm khung giờ trống mới. Bạn vui lòng quay lại sau nhé!")
         else:
             st.info(f"Spa hiện cung cấp dịch vụ độc quyền: **{DUY_NHAT_SERVICE}** (Thời lượng: 75 phút)")
+            st.markdown("### 📅 Chọn mốc giờ trống trực tiếp trên bộ lịch tháng")
+            st.caption("💡 Mẹo trên điện thoại: Hãy chạm nhẹ vào **Ô mốc giờ màu xanh** trong ngày bạn muốn hẹn để đăng ký.")
+
+            # Chuẩn bị dữ liệu sự kiện lịch
+            calendar_events = []
+            for slot in available_slots:
+                start_obj = datetime.fromisoformat(slot["start_time"])
+                calendar_events.append({
+                    "id": str(slot["id"]),
+                    "title": f"{start_obj.strftime('%H:%M')}", # Chỉ hiện Giờ:Phút cho gọn gàng
+                    "start": slot["start_time"],
+                    "end": slot["end_time"],
+                    "color": "#2e7d32", # Màu nền xanh lục bảo sang trọng cho Spa
+                    "textColor": "#ffffff" # Chữ trắng nổi bật
+                })
+
+            # Cấu hình FullCalendar
+            calendar_options = {
+                "initialView": "dayGridMonth",
+                "headerToolbar": {
+                    "left": "prev,next",
+                    "center": "title",
+                    "right": ""
+                },
+                "locale": "vi",
+                "selectable": True,
+                "contentHeight": "auto" # Tự co giãn chiều cao theo nội dung ô
+            }
+
+            # 🛠️ ĐOẠN CSS THẦN KỲ: Ép bộ lịch tự bẻ dòng và co giãn mượt mà trên Mobile
+            custom_css = """
+                /* Làm gọn ô chứa ngày trên điện thoại */
+                .fc .fc-daygrid-body { width: 100% !important; }
+                .fc-daygrid-day-number { color: #222 !important; font-weight: bold !important; font-size: 14px !important; }
+                
+                /* Biến các mốc giờ thành dạng viên thuốc (Badge) tự động xuống dòng */
+                .fc-daygrid-event {
+                    white-space: normal !important;
+                    display: inline-block !important;
+                    margin: 2px 1px !important;
+                    padding: 2px 4px !important;
+                    border-radius: 4px !important;
+                    font-size: 11px !important;
+                    font-weight: bold !important;
+                    text-align: center !important;
+                    width: calc(100% - 4px) !important;
+                }
+                
+                /* Khi màn hình nhỏ (Mobile), cho phép nhiều nút giờ xếp cạnh nhau thay vì kéo dài */
+                @media (max-width: 768px) {
+                    .fc-daygrid-event {
+                        width: auto !important;
+                        display: inline-block !important;
+                        float: left !important;
+                    }
+                    .fc-event-title { font-size: 10px !important; }
+                    .fc .fc-toolbar-title { font-size: 16px !important; }
+                }
+            """
             
-            # --- PHÂN TÁCH GIAO DIỆN TRỰC QUAN ---
-            # Thêm nút chuyển chế độ xem nhanh phòng trường hợp thiết bị không tự nhận diện được
-            view_mode = st.radio("Chọn cách hiển thị phù hợp với thiết bị của bạn:", ["📱 Điện thoại (Mobile)", "💻 Máy tính (PC/Laptop)"], horizontal=True)
-            st.write("---")
-
+            # Hiển thị bộ lịch
+            state = calendar(events=calendar_events, options=calendar_options, custom_css=custom_css, key="spa_calendar_responsive")
+            
+            # Kiểm tra sự kiện bấm chọn giờ
             selected_slot = None
+            if state.get("eventClick"):
+                clicked_event_id = int(state["eventClick"]["event"]["id"])
+                selected_slot = next((s for s in available_slots if s["id"] == clicked_event_id), None)
 
-            # ==========================================
-            # CHẾ ĐỘ 1: GIAO DIỆN MOBILE (NÚT BẤM TO - KHÔNG LỖI CHỮ)
-            # ==========================================
-            if view_mode == "📱 Điện thoại (Mobile)":
-                st.markdown("### 📅 Bước 1: Chọn một Ngày bạn muốn đến")
-                
-                # Gom nhóm các slot theo Ngày
-                grouped_slots = {}
-                for slot in available_slots:
-                    dt_obj = datetime.fromisoformat(slot["start_time"])
-                    date_str = dt_obj.strftime("%d/%m/%Y")
-                    if date_str not in grouped_slots:
-                        grouped_slots[date_str] = []
-                    grouped_slots[date_str].append(slot)
-                
-                # Hiển thị danh sách các Ngày dưới dạng các nút bấm to, dễ chạm bằng ngón tay
-                for date_key in grouped_slots.keys():
-                    total_slots = len(grouped_slots[date_str])
-                    if st.button(f"📅 Ngày {date_key} (Còn {total_slots} giờ trống)", use_container_width=True):
-                        st.session_state.mobile_selected_date = date_key
-                
-                # Nếu khách đã bấm chọn một Ngày cụ thể
-                if st.session_state.mobile_selected_date:
-                    st.write("---")
-                    st.markdown(f"### 🕒 Bước 2: Chọn khung giờ trống trong ngày **{st.session_state.mobile_selected_date}**")
-                    
-                    slots_of_day = grouped_slots[st.session_state.mobile_selected_date]
-                    
-                    # Hiện các mốc giờ trống thành từng ô nút bấm riêng biệt
-                    # Xếp mỗi hàng tối đa 2 nút giờ để vừa khít màn hình dọc của điện thoại
-                    cols_hour = st.columns(2)
-                    for idx, s in enumerate(slots_of_day):
-                        st_obj = datetime.fromisoformat(s["start_time"])
-                        en_obj = datetime.fromisoformat(s["end_time"])
-                        hour_text = f"⏱️ {st_obj.strftime('%H:%M')} - {en_obj.strftime('%H:%M')}"
-                        
-                        with cols_hour[idx % 2]:
-                            if st.button(hour_text, use_container_width=True, type="secondary"):
-                                st.session_state["chosen_slot_id_mobile"] = s["id"]
-                    
-                    # Gán slot được chọn cuối cùng từ mobile
-                    if "chosen_slot_id_mobile" in st.session_state:
-                        selected_slot = next((s for s in available_slots if s["id"] == st.session_state["chosen_slot_id_mobile"]), None)
-
-            # ==========================================
-            # CHẾ ĐỘ 2: GIAO DIỆN MÁY TÍNH (BẢNG LỊCH THÁNG)
-            # ==========================================
-            else:
-                from streamlit_calendar import calendar
-                st.markdown("### 📅 Bước 1: Chọn một giờ trống trên lịch tháng")
-                
-                calendar_events = []
-                for slot in available_slots:
-                    start_obj = datetime.fromisoformat(slot["start_time"])
-                    calendar_events.append({
-                        "id": str(slot["id"]),
-                        "title": f"🕒 {start_obj.strftime('%H:%M')}",
-                        "start": slot["start_time"],
-                        "end": slot["end_time"],
-                        "color": "#2e7d32",
-                    })
-
-                calendar_options = {"initialView": "dayGridMonth", "headerToolbar": {"left": "prev,next today", "center": "title", "right": ""}, "locale": "vi", "selectable": True}
-                custom_css = ".fc-event-title { font-weight: bold; font-size: 13px; cursor: pointer; } .fc-daygrid-day-number { color: #333; font-weight: bold; }"
-                
-                state = calendar(events=calendar_events, options=calendar_options, custom_css=custom_css, key="spa_calendar")
-                
-                if state.get("eventClick"):
-                    clicked_event_id = int(state["eventClick"]["event"]["id"])
-                    selected_slot = next((s for s in available_slots if s["id"] == clicked_event_id), None)
-
-            # ==========================================
-            # BƯỚC CUỐI: XÁC NHẬN VÀ ĐẶT LỊCH (CHUNG CHO CẢ 2 GIAO DIỆN)
-            # ==========================================
+            # Khối xử lý đặt lịch khi có giờ được lựa chọn
             if selected_slot:
                 st_obj = datetime.fromisoformat(selected_slot["start_time"])
                 en_obj = datetime.fromisoformat(selected_slot["end_time"])
@@ -274,19 +259,12 @@ else:
                                 st.balloons()
                                 st.success(f"🎉 Xin chúc mừng {info_khach['full_name']}! Bạn đã đặt lịch hẹn thành công.")
                                 
-                                # Tạo link Google Calendar
                                 s_time = st_obj.strftime("%Y%m%dT%H%M%S")
                                 e_time = en_obj.strftime("%Y%m%dT%H%M%S")
                                 cal_title = urllib.parse.quote(f"Lịch Hẹn Spa - {DUY_NHAT_SERVICE}")
                                 cal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={cal_title}&dates={s_time}/{e_time}"
                                 st.markdown(f"[📅 Nhấp vào đây để tự thêm lịch hẹn này vào Google Calendar cá nhân của bạn]({cal_url})")
             else:
-                if view_mode == "📱 Điện thoại (Mobile)":
-                    if not st.session_state.mobile_selected_date:
-                        st.info("💡 Hãy nhấn chọn một **Ngày làm việc** ở trên để xem các khung giờ trống của ngày đó.")
-                    else:
-                        st.warning("👈 Tiếp theo, hãy nhấn chọn một **Khung giờ trống** cụ thể vừa hiện ra ở Bước 2.")
-                else:
-                    st.warning("👈 Vui lòng dùng chuột bấm chọn trực tiếp vào một ô **Chữ hiển thị Mốc Giờ màu xanh** trên bảng lịch tháng ở trên.")
+                st.warning("👈 Vui lòng bấm chọn trực tiếp vào một ô **Mốc Giờ màu xanh** trên bảng lịch tháng ở trên để bắt đầu điền thông tin.")
     else:
         st.error("Không thể tải thông tin do lỗi kết nối API Supabase.")
