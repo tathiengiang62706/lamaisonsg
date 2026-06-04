@@ -39,7 +39,7 @@ TEN_SPA = "La Maison Beauté"
 URL_LOGO_SPA = "https://i.imgur.com/your-logo-link.png" 
 URL_NỀN_SPA = "https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1920" 
 
-# Danh sách Quận/Huyện TP.HCM để chọn nhanh khi tạo dữ liệu khách hàng
+# Danh sách Quận/Huyện TP.HCM để chọn nhanh khi tạo/sửa dữ liệu khách hàng
 DANH_SACH_QUAN_HCM = [
     "Quận 1, TP. HCM", "Quận 3, TP. HCM", "Quận 4, TP. HCM", "Quận 5, TP. HCM",
     "Quận 6, TP. HCM", "Quận 7, TP. HCM", "Quận 8, TP. HCM", "Quận 10, TP. HCM",
@@ -151,20 +151,19 @@ if is_admin_route:
                                 supabase.table("slots").delete().eq("id", s["id"]).execute()
                                 st.rerun()
 
-        # ---- TAB 2: QUẢN LÝ KHÁCH HÀNG (BỔ SUNG THÀNH PHẦN ĐỊA CHỈ QUẬN HCM / TỈNH THÀNH) ----
+        # ---- TAB 2: QUẢN LÝ KHÁCH HÀNG (ĐÃ ĐỒNG BỘ DROP DOWN CHO PHẦN SỬA ĐỊA CHỈ) ----
         with tab2:
             st.markdown("### ➕ Tạo tài khoản mới cho khách hàng")
             with st.container(border=True):
                 c_name = st.text_input("Họ và tên khách hàng:", key="adm_cust_name")
                 c_phone = st.text_input("Số điện thoại khách:", key="adm_cust_phone")
                 
-                # Logic phân loại khu vực thông minh để tạo cực nhanh
-                region_option = st.radio("Khu vực sinh sống của khách:", ["📍 Thuộc TP. Hồ Chí Minh (Mặc định chọn nhanh)", "✈️ Tỉnh thành khác (Khách ở xa)"], horizontal=True)
+                region_option = st.radio("Khu vực sinh sống của khách:", ["📍 Thuộc TP. Hồ Chí Minh (Mặc định chọn nhanh)", "✈️ Tỉnh thành khác (Khách ở xa)"], horizontal=True, key="add_region_option")
                 
                 if region_option == "📍 Thuộc TP. Hồ Chí Minh (Mặc định chọn nhanh)":
-                    c_address = st.selectbox("Chọn quận/huyện tại TP.HCM:", DANH_SACH_QUAN_HCM)
+                    c_address = st.selectbox("Chọn quận/huyện tại TP.HCM:", DANH_SACH_QUAN_HCM, key="add_address_hcm")
                 else:
-                    c_address = st.text_input("Nhập tên Tỉnh/Thành phố hoặc địa chỉ cụ thể của khách ở xa:", placeholder="Ví dụ: TP. Vũng Tàu, Tỉnh Đồng Nai, Bình Dương...")
+                    c_address = st.text_input("Nhập tên Tỉnh/Thành phố hoặc địa chỉ cụ thể của khách ở xa:", placeholder="Ví dụ: TP. Vũng Tàu, Tỉnh Đồng Nai, Bình Dương...", key="add_address_other")
                 
                 if st.button("Tạo tài khoản khách", type="primary", key="btn_save_cust"):
                     if not c_name.strip() or not c_phone.strip():
@@ -192,7 +191,7 @@ if is_admin_route:
                 if not customers_list:
                     st.info("Hiện chưa có tài khoản khách hàng nào.")
                 else:
-                    # Giao diện ô chỉnh sửa thông tin khách hàng
+                    # GIAO DIỆN SỬA THÔNG TIN KHÁCH HÀNG (ĐÃ NÂNG CẤP MENU DROPDOWN ĐỊA CHỈ)
                     if st.session_state.editing_customer_id:
                         current_edit_id = st.session_state.editing_customer_id
                         edit_cust = next((c for c in customers_list if c["id"] == current_edit_id), None)
@@ -202,15 +201,38 @@ if is_admin_route:
                             with st.container(border=True):
                                 new_name = st.text_input("Sửa Họ và Tên:", value=edit_cust["full_name"])
                                 new_phone = st.text_input("Sửa Số điện thoại:", value=edit_cust["phone"])
-                                new_addr = st.text_input("Sửa Địa chỉ:", value=edit_cust.get("address", ""))
+                                
+                                # Xác định xem địa chỉ cũ của khách có nằm trong danh sách TP.HCM không
+                                current_addr = edit_cust.get("address", "")
+                                is_hcm_addr = current_addr in DANH_SACH_QUAN_HCM
+                                
+                                # Tạo lựa chọn loại khu vực khi sửa
+                                edit_region_index = 0 if is_hcm_addr else 1
+                                edit_region = st.radio(
+                                    "Sửa khu vực sinh sống:", 
+                                    ["📍 Thuộc TP. Hồ Chí Minh (Mặc định chọn nhanh)", "✈️ Tỉnh thành khác (Khách ở xa)"], 
+                                    index=edit_region_index,
+                                    horizontal=True,
+                                    key="edit_region_choice"
+                                )
+                                
+                                if edit_region == "📍 Thuộc TP. Hồ Chí Minh (Mặc định chọn nhanh)":
+                                    # Nếu địa chỉ cũ đúng là một quận thuộc HCM, cho chọn làm mặc định, ngược lại chọn Quận 1
+                                    default_hcm_idx = DANH_SACH_QUAN_HCM.index(current_addr) if is_hcm_addr else 0
+                                    new_addr_val = st.selectbox("Chọn quận/huyện tại TP.HCM:", DANH_SACH_QUAN_HCM, index=default_hcm_idx, key="edit_address_hcm")
+                                else:
+                                    # Nếu trước đó đang chọn HCM mà bấm chuyển sang Tỉnh khác, ô chữ sẽ rỗng, ngược lại giữ nguyên địa chỉ tỉnh cũ
+                                    default_other_val = "" if is_hcm_addr else current_addr
+                                    new_addr_val = st.text_input("Sửa tên Tỉnh/Thành phố của khách ở xa:", value=default_other_val, key="edit_address_other")
                                 
                                 col_edit_btn1, col_edit_btn2 = st.columns(2)
                                 if col_edit_btn1.button("💾 Lưu thay đổi", type="primary"):
                                     if new_name.strip() and new_phone.strip():
+                                        final_edited_address = new_addr_val.strip() if new_addr_val else "Chưa cập nhật"
                                         supabase.table("customers").update({
                                             "full_name": new_name.strip(), 
                                             "phone": new_phone.strip(),
-                                            "address": new_addr.strip()
+                                            "address": final_edited_address
                                         }).eq("id", current_edit_id).execute()
                                         st.session_state.editing_customer_id = None
                                         st.toast("✅ Đã cập nhật thông tin thành công!")
@@ -223,7 +245,7 @@ if is_admin_route:
                                     st.rerun()
                             st.write("---")
 
-                    # Vòng lặp hiển thị danh sách
+                    # Vòng lặp hiển thị danh sách khách hàng
                     for cust in customers_list:
                         with st.container(border=True):
                             c_col1, c_col2, c_col3 = st.columns([3, 1, 1])
