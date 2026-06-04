@@ -28,16 +28,13 @@ st.set_page_config(page_title="La Maison Beauté - Booking System", layout="wide
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-if "current_role" not in st.session_state:
-    st.session_state.current_role = "Khách Hàng"
 
 DUY_NHAT_SERVICE = "Chăm sóc da mặt chuyên sâu"
 TEN_SPA = "La Maison Beauté"
 
-# 🌟 CẤU HÌNH LINK LOGO & HÌNH NỀN THƯƠNG HIỆU CỦA BẠN TẠI ĐÂY
-# Bạn có thể thay các link ảnh dưới đây bằng link ảnh thật của Spa bạn (Up lên imgur hoặc host nào đó)
-URL_LOGO_SPA = "https://i.imgur.com/your-logo-link.png" # Nếu chưa có logo, hệ thống sẽ tự hiện chữ thương hiệu cách điệu
-URL_NỀN_SPA = "https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1920" # Ảnh nền hoa bay/đá nóng/không gian spa thư giãn nhẹ nhàng
+# CẤU HÌNH LINK LOGO & HÌNH NỀN THƯƠNG HIỆU
+URL_LOGO_SPA = "https://i.imgur.com/your-logo-link.png" 
+URL_NỀN_SPA = "https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1920" 
 
 # Hàm sinh file lịch .ics để add thẳng vào iPhone
 def generate_ics_download_link(summary, start_dt, end_dt):
@@ -48,28 +45,24 @@ def generate_ics_download_link(summary, start_dt, end_dt):
     href = f'<a href="data:text/calendar;charset=utf-8;base64,{b64}" download="lich_hen_spa.ics" style="display: inline-block; padding: 12px 24px; background-color: #D4AF37; color: white; text-decoration: none; border-radius: 50px; font-weight: bold; margin-top: 10px; box-shadow: 0 4px 15px rgba(212,175,55,0.3);">📅 Thêm Vào Lịch iPhone (Apple Calendar)</a>'
     return href
 
-# --- THANH MENU ĐIỀU HƯỚNG TRÊN CÙNG TRANG WEB ---
-st.markdown(f"<h2 style='text-align: center; color: #af9444; font-family: \"Playfair Display\", serif; letter-spacing: 2px;'>{TEN_SPA.upper()}</h2>", unsafe_allow_html=True)
-col_menu1, col_menu2 = st.columns(2)
-
-with col_menu1:
-    if st.button("✨ GIAO DIỆN KHÁCH HÀNG", use_container_width=True, type="secondary" if st.session_state.current_role == "Chủ Spa (Admin)" else "primary"):
-        st.session_state.current_role = "Khách Hàng"
-        st.rerun()
-
-with col_menu2:
-    if st.button("💆‍♂️ GIAO DIỆN CHỦ SPA (ADMIN)", use_container_width=True, type="primary" if st.session_state.current_role == "Chủ Spa (Admin)" else "secondary"):
-        st.session_state.current_role = "Chủ Spa (Admin)"
-        st.rerun()
-
-st.write("---")
 
 # -------------------------------------------------------------------------
-# PHẦN A: GIAO DIỆN CHỦ SPA (ADMIN)
+# 2. KIỂM TRA ĐƯỜNG DẪN ẨN (QUERY PARAMETERS) ĐỂ PHÂN CHIA TRANG ĐỘC LẬP
 # -------------------------------------------------------------------------
-if st.session_state.current_role == "Chủ Spa (Admin)":
+# Đọc tham số đằng sau URL, ví dụ: web-cua-ban.com/?page=admin
+query_params = st.query_params
+is_admin_route = query_params.get("page") == "admin"
+
+
+# =========================================================================
+# LUỒNG 1: GIAO DIỆN CHỦ SPA (BÍ MẬT - CHỈ VÀO ĐƯỢC KHI THÊM ?page=admin)
+# =========================================================================
+if is_admin_route:
+    st.markdown(f"<h2 style='color: #af9444; font-family: \"Playfair Display\", serif;'>💆‍♂️ HỆ THỐNG QUẢN TRỊ NỘI BỘ - {TEN_SPA.upper()}</h2>", unsafe_allow_html=True)
+    st.write("---")
+
     if not st.session_state.logged_in:
-        st.subheader(f"🔑 Đăng nhập quyền quản trị {TEN_SPA}")
+        st.subheader("🔑 Đăng nhập quyền quản trị")
         with st.container(border=True):
             username = st.text_input("Tài khoản admin:")
             password = st.text_input("Mật khẩu admin:", type="password")
@@ -81,13 +74,14 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                 else:
                     st.error("Sai tài khoản hoặc mật khẩu!")
     else:
-        st.subheader(f"⚙️ Khu vực quản trị của Chủ Spa - {TEN_SPA}")
+        st.write(f"Chào mừng chủ tiệm đăng nhập hệ thống quản lý của **{TEN_SPA}**")
         if st.button("🚪 Đăng xuất khỏi Admin"):
             st.session_state.logged_in = False
             st.rerun()
             
         tab1, tab2, tab3 = st.tabs(["➕ Tạo & Xóa Lịch Trống (90p)", "👤 Tạo Tài Khoản Khách Hàng", "📋 Quản Lý Lịch Hẹn & Điểm Danh"])
         
+        # ---- TAB 1: TẠO KHUNG GIỜ TRỐNG & QUẢN LÝ XÓA LỊCH ----
         with tab1:
             st.markdown("#### Tạo khung giờ mở cửa cho Spa")
             col_t1, col_t2 = st.columns(2)
@@ -145,6 +139,7 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                                 supabase.table("slots").delete().eq("id", s["id"]).execute()
                                 st.rerun()
 
+        # ---- TAB 2: TẠO TÀI KHOẢN KHÁCH HÀNG ----
         with tab2:
             st.markdown("#### Tạo tài khoản mới cho khách hàng")
             with st.container(border=True):
@@ -158,6 +153,7 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                         except Exception:
                             st.error("Số điện thoại này đã tồn tại!")
 
+        # ---- TAB 3: QUẢN LÝ LỊCH HẸN & ĐIỂM DANH ----
         with tab3:
             st.markdown("#### Quản lý danh sách đặt lịch và điểm danh")
             if supabase:
@@ -194,36 +190,32 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                                 c3.markdown(f"[💬 Nhắc Zalo](https://zalo.me/{cust_info['phone']})")
                                 c3.code(msg, language="text")
 
-# -------------------------------------------------------------------------
-# PHẦN B: GIAO DIỆN KHÁCH HÀNG (TÙY BIẾN ĐỘC QUYỀN LA MAISON BEAUTÉ)
-# -------------------------------------------------------------------------
+
+# =========================================================================
+# LUỒNG 2: GIAO DIỆN KHÁCH HÀNG (MẶC ĐỊNH - KHÔNG HIỂN THỊ MENU ADMIN)
+# =========================================================================
 else:
     from streamlit_calendar import calendar
 
-    # 🌟 1. CSS CUSTOM DESIGN: Phủ hình nền, chỉnh mờ card, đổi font chữ quý phái cho Spa
+    # CSS độc quyền phủ hình nền sang trọng quyến rũ cho khách hàng nữ
     style_html = f"""
     <style>
-        /* Nhúng hình nền sang trọng cho toàn bộ vùng đặt lịch của khách */
         .stApp {{
             background-image: linear-gradient(rgba(255, 255, 255, 0.82), rgba(245, 240, 230, 0.88)), url("{URL_NỀN_SPA}");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
+            background-size: cover; background-position: center; background-attachment: fixed;
         }}
-        /* Làm trắng mờ các bảng form tạo cảm giác cao cấp (Glassmorphism) */
         [data-testid="stForm"], .stForm, [data-testid="stExpander"], .element-container div.stMarkdown {{
             background-color: rgba(255, 255, 255, 0.65) !important;
-            backdrop-filter: blur(10px);
-            border-radius: 16px !important;
-            border: 1px solid rgba(212, 175, 55, 0.2) !important;
+            backdrop-filter: blur(10px); border-radius: 16px !important; border: 1px solid rgba(212, 175, 55, 0.2) !important;
         }}
     </style>
     """
     st.markdown(style_html, unsafe_allow_html=True)
 
-    # 🌟 2. HIỂN THỊ LOGO THƯƠNG HIỆU LÊN ĐẦU LỊCH KHÁCH
+    # Hiển thị LOGO và Slogan của hãng quý phái lên đầu trang
     st.markdown("<div style='text-align: center; margin-bottom: 20px;'>", unsafe_allow_html=True)
-    st.image(URL_LOGO_SPA, width=180, caption=None) # Nếu lỗi hình hệ thống sẽ bỏ qua, bạn yên tâm
+    st.image(URL_LOGO_SPA, width=180, caption=None) 
+    st.markdown(f"<h1 style='text-align: center; color: #af9444; font-family: \"Playfair Display\", serif; letter-spacing: 2px; margin-top:10px;'>{TEN_SPA.upper()}</h1>", unsafe_allow_html=True)
     st.markdown(f"<p style='text-align: center; font-style: italic; color: #8A7322;'>Không gian chăm sóc sắc đẹp cao cấp độc bản</p>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -238,7 +230,7 @@ else:
                 st.warning(f"Hiện tại {TEN_SPA} đã kín lịch. Bạn vui lòng quay lại sau nhé!")
             else:
                 st.markdown(f"<div style='background-color: rgba(212,175,55,0.1); padding: 15px; border-radius: 12px; border-left: 5px solid #D4AF37; margin-bottom:15px;'>✨ Gói dịch vụ độc quyền: <b>{DUY_NHAT_SERVICE}</b> (Liệu trình trọn gói 75 phút)</div>", unsafe_allow_html=True)
-                st.markdown("### 📅 Bước 1: Chọn mốc giờ trống trên lịch tháng")
+                st.markdown("### 📅 Chọn mốc giờ trống trực tiếp trên bộ lịch tháng")
 
                 calendar_events = []
                 for slot in available_slots:
@@ -248,7 +240,7 @@ else:
                         "title": f"🕒 {start_obj.strftime('%H:%M')}",
                         "start": slot["start_time"],
                         "end": slot["end_time"],
-                        "color": "#af9444", # Đổi nút giờ thành màu vàng Gold hoàng gia phối hợp thương hiệu
+                        "color": "#af9444", 
                         "textColor": "#ffffff"
                     })
 
@@ -258,7 +250,6 @@ else:
                     "locale": "vi", "selectable": True, "contentHeight": "auto", "displayEventTime": False 
                 }
                 
-                # CSS Custom biến các ô mốc giờ vuông thành kẹo bo tròn sang trọng quyến rũ
                 custom_css = """
                     .fc .fc-daygrid-body { width: 100% !important; }
                     .fc-daygrid-day-number { color: #555 !important; font-weight: bold !important; font-size: 14px !important; }
@@ -266,7 +257,7 @@ else:
                     .fc-daygrid-event {
                         white-space: normal !important; display: inline-block !important; margin: 3px 2px !important; padding: 4px 8px !important;
                         border-radius: 30px !important; font-size: 12px !important; font-weight: bold !important; text-align: center !important; 
-                        box-shadow: 0 2px 6px rgba(0,0,0,0.1) !important; border: none !important; width: calc(100% - 6px) !important;
+                        box-shadow: 0 2px 6px rgba(0,0,0,0.1) !important; border: none !important; width: calc(100% - 4px) !important;
                     }
                     @media (max-width: 768px) {
                         .fc-daygrid-event { width: auto !important; display: inline-block !important; float: left !important; }
@@ -285,7 +276,7 @@ else:
                     en_obj = st_obj + timedelta(minutes=90)
                     
                     st.write("---")
-                    st.markdown("### 📝 Bước cuối: Xác nhận tài khoản và đặt lịch")
+                    st.markdown("### 📝 Xác nhận tài khoản và đặt lịch")
                     st.success(f"🎯 Khung giờ bạn chọn: **{st_obj.strftime('%H:%M')} - {en_obj.strftime('%H:%M')}** ngày **{st_obj.strftime('%d/%m/%Y')}**")
                     
                     with st.form("booking_form_luxury"):
