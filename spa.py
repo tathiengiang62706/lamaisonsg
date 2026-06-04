@@ -11,6 +11,7 @@ try:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 except Exception:
+    # Điền thông tin dự án thật của bạn vào đây nếu chạy dưới máy tính (Local)
     SUPABASE_URL = "https://your-supabase-url.supabase.co"
     SUPABASE_KEY = "your-supabase-anon-key"
 
@@ -28,6 +29,8 @@ st.set_page_config(page_title="La Maison Beauté - Booking System", layout="wide
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+if "editing_customer_id" not in st.session_state:
+    st.session_state.editing_customer_id = None
 
 DUY_NHAT_SERVICE = "Chăm sóc da mặt chuyên sâu"
 TEN_SPA = "La Maison Beauté"
@@ -49,13 +52,12 @@ def generate_ics_download_link(summary, start_dt, end_dt):
 # -------------------------------------------------------------------------
 # 2. KIỂM TRA ĐƯỜNG DẪN ẨN (QUERY PARAMETERS) ĐỂ PHÂN CHIA TRANG ĐỘC LẬP
 # -------------------------------------------------------------------------
-# Đọc tham số đằng sau URL, ví dụ: web-cua-ban.com/?page=admin
 query_params = st.query_params
 is_admin_route = query_params.get("page") == "admin"
 
 
 # =========================================================================
-# LUỒNG 1: GIAO DIỆN CHỦ SPA (BÍ MẬT - CHỈ VÀO ĐƯỢC KHI THÊM ?page=admin)
+# LUỒNG 1: GIAO DIỆN CHỦ SPA (BÍ MẬT - ĐẦY ĐỦ TÍNH NĂNG SỬA/XÓA KHÁCH HÀNG)
 # =========================================================================
 if is_admin_route:
     st.markdown(f"<h2 style='color: #af9444; font-family: \"Playfair Display\", serif;'>💆‍♂️ HỆ THỐNG QUẢN TRỊ NỘI BỘ - {TEN_SPA.upper()}</h2>", unsafe_allow_html=True)
@@ -79,7 +81,7 @@ if is_admin_route:
             st.session_state.logged_in = False
             st.rerun()
             
-        tab1, tab2, tab3 = st.tabs(["➕ Tạo & Xóa Lịch Trống (90p)", "👤 Tạo Tài Khoản Khách Hàng", "📋 Quản Lý Lịch Hẹn & Điểm Danh"])
+        tab1, tab2, tab3 = st.tabs(["➕ Tạo & Xóa Lịch Trống (90p)", "👤 Quản Lý Tài Khoản Khách Hàng", "📋 Quản Lý Lịch Hẹn & Điểm Danh"])
         
         # ---- TAB 1: TẠO KHUNG GIỜ TRỐNG & QUẢN LÝ XÓA LỊCH ----
         with tab1:
@@ -139,9 +141,9 @@ if is_admin_route:
                                 supabase.table("slots").delete().eq("id", s["id"]).execute()
                                 st.rerun()
 
-        # ---- TAB 2: TẠO TÀI KHOẢN KHÁCH HÀNG ----
+        # ---- TAB 2: QUẢN LÝ TÀI KHOẢN KHÁCH HÀNG (ĐÃ THÊM DANH SÁCH + SỬA + XÓA) ----
         with tab2:
-            st.markdown("#### Tạo tài khoản mới cho khách hàng")
+            st.markdown("### ➕ Tạo tài khoản mới cho khách hàng")
             with st.container(border=True):
                 c_name = st.text_input("Họ và tên khách hàng:", key="adm_cust_name")
                 c_phone = st.text_input("Số điện thoại khách:", key="adm_cust_phone")
@@ -150,8 +152,67 @@ if is_admin_route:
                         try:
                             supabase.table("customers").insert({"full_name": c_name, "phone": c_phone.strip()}).execute()
                             st.success(f"🎉 Đã tạo thành công tài khoản cho khách: **{c_name}**")
+                            st.rerun()
                         except Exception:
-                            st.error("Số điện thoại này đã tồn tại!")
+                            st.error("Số điện thoại này đã tồn tại trên hệ thống!")
+
+            st.write("---")
+            st.markdown("### 👤 Danh sách khách hàng hiện có")
+            
+            if supabase:
+                # Tải toàn bộ danh sách khách hàng từ Database
+                cust_res = supabase.table("customers").select("*").order("full_name").execute()
+                customers_list = cust_res.data if cust_res.data else []
+                
+                if not customers_list:
+                    st.info("Hiện chưa có tài khoản khách hàng nào.")
+                else:
+                    # Giao diện ô chỉnh sửa thông tin (Chỉ xuất hiện khi Admin click vào nút Sửa)
+                    if st.session_state.editing_customer_id:
+                        current_edit_id = st.session_state.editing_customer_id
+                        # Tìm thông tin khách đang được chọn để sửa
+                        edit_cust = next((c for c in customers_list if c["id"] == current_edit_id), None)
+                        
+                        if edit_cust:
+                            st.markdown(f"#### 🛠️ Cập nhật thông tin cho khách: **{edit_cust['full_name']}**")
+                            with st.container(border=True):
+                                new_name = st.text_input("Sửa Họ và Tên:", value=edit_cust["full_name"])
+                                new_phone = st.text_input("Sửa Số điện thoại:", value=edit_cust["phone"])
+                                
+                                col_edit_btn1, col_edit_btn2 = st.columns(2)
+                                if col_edit_btn1.button("💾 Lưu thay đổi", type="primary"):
+                                    if new_name.strip() and new_phone.strip():
+                                        supabase.table("customers").update({"full_name": new_name.strip(), "phone": new_phone.strip()}).eq("id", current_edit_id).execute()
+                                        st.session_state.editing_customer_id = None
+                                        st.toast("✅ Đã cập nhật thông tin thành công!")
+                                        st.rerun()
+                                    else:
+                                        st.error("Không được để trống Tên hoặc Số điện thoại!")
+                                        
+                                if col_edit_btn2.button("❌ Hủy bỏ"):
+                                    st.session_state.editing_customer_id = None
+                                    st.rerun()
+                            st.write("---")
+
+                    # Vòng lặp in danh sách khách hàng thành từng dòng chỉn chu
+                    for cust in customers_list:
+                        with st.container(border=True):
+                            c_col1, c_col2, c_col3 = st.columns([3, 1, 1])
+                            
+                            # Cột 1: Thông tin cơ bản
+                            c_col1.markdown(f"👤 Tên khách: **{cust['full_name']}**")
+                            c_col1.markdown(f"📱 Số điện thoại: `{cust['phone']}`")
+                            
+                            # Cột 2: Nút Sửa thông tin
+                            if c_col2.button("✏️ Sửa", key=f"edit_cust_{cust['id']}", use_container_width=True):
+                                st.session_state.editing_customer_id = cust["id"]
+                                st.rerun()
+                                
+                            # Cột 3: Nút Xóa tài khoản
+                            if c_col3.button("🗑️ Xóa", key=f"del_cust_{cust['id']}", type="secondary", use_container_width=True):
+                                supabase.table("customers").delete().eq("id", cust["id"]).execute()
+                                st.toast(f"❌ Đã xóa tài khoản khách: {cust['full_name']}")
+                                st.rerun()
 
         # ---- TAB 3: QUẢN LÝ LỊCH HẸN & ĐIỂM DANH ----
         with tab3:
@@ -192,12 +253,11 @@ if is_admin_route:
 
 
 # =========================================================================
-# LUỒNG 2: GIAO DIỆN KHÁCH HÀNG (MẶC ĐỊNH - KHÔNG HIỂN THỊ MENU ADMIN)
+# LUỒNG 2: GIAO DIỆN KHÁCH HÀNG (MẶC ĐỊNH TUYỆT ĐỐI - KHÔNG THẤY ADMIN)
 # =========================================================================
 else:
     from streamlit_calendar import calendar
 
-    # CSS độc quyền phủ hình nền sang trọng quyến rũ cho khách hàng nữ
     style_html = f"""
     <style>
         .stApp {{
@@ -212,7 +272,6 @@ else:
     """
     st.markdown(style_html, unsafe_allow_html=True)
 
-    # Hiển thị LOGO và Slogan của hãng quý phái lên đầu trang
     st.markdown("<div style='text-align: center; margin-bottom: 20px;'>", unsafe_allow_html=True)
     st.image(URL_LOGO_SPA, width=180, caption=None) 
     st.markdown(f"<h1 style='text-align: center; color: #af9444; font-family: \"Playfair Display\", serif; letter-spacing: 2px; margin-top:10px;'>{TEN_SPA.upper()}</h1>", unsafe_allow_html=True)
