@@ -26,7 +26,7 @@ supabase: Client = init_supabase()
 
 st.set_page_config(page_title="La Maison Beauté - Booking System", layout="wide")
 
-# KHỞI TẠO BỘ NHỚ TRẠNG THÁI (SESSION STATE) ĐỂ TRÁNH LỖI MẤT DỮ LIỆU
+# Khởi tạo trạng thái bộ nhớ
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "editing_customer_id" not in st.session_state:
@@ -36,6 +36,7 @@ if "is_admin_mode" not in st.session_state:
 
 DUY_NHAT_SERVICE = "Chăm sóc da mặt chuyên sâu"
 TEN_SPA = "La Maison Beauté"
+
 URL_LOGO_SPA = "https://i.imgur.com/your-logo-link.png" 
 URL_NỀN_SPA = "https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1920" 
 
@@ -56,17 +57,14 @@ def generate_ics_download_link(summary, start_dt, end_dt):
     href = f'<a href="data:text/calendar;charset=utf-8;base64,{b64}" download="lich_hen_spa.ics" style="display: inline-block; padding: 12px 24px; background-color: #D4AF37; color: white; text-decoration: none; border-radius: 50px; font-weight: bold; margin-top: 10px; box-shadow: 0 4px 15px rgba(212,175,55,0.3);">📅 Thêm Vào Lịch iPhone (Apple Calendar)</a>'
     return href
 
-
 # -------------------------------------------------------------------------
-# 2. XỬ LÝ ĐƯỜNG DẪN ẨN (GHIM CHẶT QUYỀN ADMIN KHÔNG BỊ VĂNG)
+# 2. XỬ LÝ ĐƯỜNG DẪN ẨN
 # -------------------------------------------------------------------------
-# Nếu URL có chữ page=admin, lập tức khóa chế độ Admin vào bộ nhớ
 if st.query_params.get("page") == "admin":
     st.session_state.is_admin_mode = True
 
-
 # =========================================================================
-# LUỒNG 1: GIAO DIỆN CHỦ SPA (NỘI BỘ BÍ MẬT - HOẠT ĐỘNG 100% HOÀN HẢO)
+# LUỒNG 1: GIAO DIỆN CHỦ SPA
 # =========================================================================
 if st.session_state.is_admin_mode:
     st.markdown(f"<h2 style='color: #af9444; font-family: \"Playfair Display\", serif;'>💆‍♂️ HỆ THỐNG QUẢN TRỊ NỘI BỘ - {TEN_SPA.upper()}</h2>", unsafe_allow_html=True)
@@ -93,7 +91,7 @@ if st.session_state.is_admin_mode:
             
         tab1, tab2, tab3 = st.tabs(["➕ Tạo & Xóa Lịch Trống", "👤 Quản Lý Khách Hàng", "📋 Quản Lý Đặt Lịch"])
         
-        # ---- TAB 1: TẠO KHUNG GIỜ TRỐNG & QUẢN LÝ XÓA LỊCH ----
+        # ---- TAB 1: QUẢN LÝ LỊCH TRỐNG ----
         with tab1:
             st.markdown("#### Tạo khung giờ mở cửa cho Spa")
             col_t1, col_t2 = st.columns(2)
@@ -102,7 +100,7 @@ if st.session_state.is_admin_mode:
             with col_t2:
                 start_time = st.time_input("Giờ bắt đầu đón khách", datetime.now().time(), key="adm_time")
                 
-            if st.button("Xác Nhận Tạo Khung Giờ", type="primary", key="btn_create_slot"):
+            if st.button("Xác Nhận Tạo Khung Giờ", type="primary"):
                 start_dt = datetime.combine(date, start_time)
                 end_dt = start_dt + timedelta(minutes=90)
                 data = {"start_time": start_dt.isoformat(), "end_time": end_dt.isoformat(), "status": "available"}
@@ -126,7 +124,7 @@ if st.session_state.is_admin_mode:
                 if not all_slots:
                     st.info("Hiện tại chưa có khung giờ nào được tạo.")
                 else:
-                    filter_status = st.radio("Lọc danh sách theo trạng thái:", ["Tất cả", "Chưa ai đặt (Trống)", "Đã có người đặt (Kín)"], horizontal=True, key="filter_slot_status")
+                    filter_status = st.radio("Lọc danh sách theo trạng thái:", ["Tất cả", "Chưa ai đặt (Trống)", "Đã có người đặt (Kín)"], horizontal=True)
                     for s in all_slots:
                         if filter_status == "Chưa ai đặt (Trống)" and s["status"] != "available": continue
                         if filter_status == "Đã có người đặt (Kín)" and s["status"] != "booked": continue
@@ -151,32 +149,25 @@ if st.session_state.is_admin_mode:
                             if customer_info_str: c_slot1.markdown(customer_info_str)
                             c_slot2.markdown(f"Trạng thái: **{badge}**")
                             
-                            # Tính năng xóa an toàn có bẫy lỗi hiển thị
                             if c_slot3.button("🗑️ Xóa", key=f"del_slot_{s['id']}", type="secondary"):
-                                try:
-                                    supabase.table("slots").delete().eq("id", s["id"]).execute()
-                                    st.rerun()
-                                except Exception as e:
-                                    if "foreign key constraint" in str(e).lower():
-                                        st.error("❌ Slot này đã có khách. Bạn cần chạy lệnh CASCADE trên Supabase trước khi xóa.")
-                                    else:
-                                        st.error(f"❌ Lỗi: {e}")
+                                supabase.table("slots").delete().eq("id", s["id"]).execute()
+                                st.rerun()
 
-        # ---- TAB 2: QUẢN LÝ TÀI KHOẢN KHÁCH HÀNG (SỬA/XÓA MƯỢT MÀ) ----
+        # ---- TAB 2: QUẢN LÝ KHÁCH HÀNG ----
         with tab2:
             st.markdown("### ➕ Tạo tài khoản mới cho khách hàng")
             with st.container(border=True):
-                c_name = st.text_input("Họ và tên khách hàng:", key="adm_cust_name")
-                c_phone = st.text_input("Số điện thoại khách:", key="adm_cust_phone")
+                c_name = st.text_input("Họ và tên khách hàng:")
+                c_phone = st.text_input("Số điện thoại khách:")
                 
-                region_option = st.radio("Khu vực sinh sống của khách:", ["📍 Thuộc TP. Hồ Chí Minh (Mặc định chọn nhanh)", "✈️ Tỉnh thành khác (Khách ở xa)"], horizontal=True, key="add_region_option")
+                region_option = st.radio("Khu vực sinh sống của khách:", ["📍 Thuộc TP. Hồ Chí Minh", "✈️ Tỉnh thành khác"], horizontal=True)
                 
-                if region_option == "📍 Thuộc TP. Hồ Chí Minh (Mặc định chọn nhanh)":
-                    c_address = st.selectbox("Chọn quận/huyện tại TP.HCM:", DANH_SACH_QUAN_HCM, key="add_address_hcm")
+                if region_option == "📍 Thuộc TP. Hồ Chí Minh":
+                    c_address = st.selectbox("Chọn quận/huyện tại TP.HCM:", DANH_SACH_QUAN_HCM)
                 else:
-                    c_address = st.text_input("Nhập tên Tỉnh/Thành phố hoặc địa chỉ cụ thể của khách ở xa:", placeholder="Ví dụ: TP. Vũng Tàu, Tỉnh Đồng Nai, Bình Dương...", key="add_address_other")
+                    c_address = st.text_input("Nhập tên Tỉnh/Thành phố của khách ở xa:")
                 
-                if st.button("Tạo tài khoản khách", type="primary", key="btn_save_cust"):
+                if st.button("Tạo tài khoản khách", type="primary"):
                     if not c_name.strip() or not c_phone.strip():
                         st.error("Vui lòng điền đầy đủ Họ tên và Số điện thoại khách!")
                     elif supabase:
@@ -187,7 +178,7 @@ if st.session_state.is_admin_mode:
                                 "phone": c_phone.strip(),
                                 "address": final_address
                             }).execute()
-                            st.success(f"🎉 Đã tạo thành công tài khoản cho khách: **{c_name}**")
+                            st.success(f"🎉 Đã tạo thành công tài khoản!")
                             st.rerun()
                         except Exception:
                             st.error("Số điện thoại này đã tồn tại trên hệ thống!")
@@ -202,27 +193,27 @@ if st.session_state.is_admin_mode:
                 if not customers_list:
                     st.info("Hiện chưa có tài khoản khách hàng nào.")
                 else:
-                    # GIAO DIỆN SỬA ĐỊA CHỈ KHÁCH HÀNG (ĐƯỢC BỌC TRONG FORM KIÊN CỐ)
+                    # GIAO DIỆN SỬA ĐỊA CHỈ KHÁCH HÀNG 
                     if st.session_state.editing_customer_id:
                         current_edit_id = st.session_state.editing_customer_id
                         edit_cust = next((c for c in customers_list if c["id"] == current_edit_id), None)
                         
                         if edit_cust:
-                            st.markdown(f"#### 🛠️ Cập nhật thông tin cho: **{edit_cust['full_name']}**")
+                            st.markdown(f"#### 🛠️ Cập nhật thông tin: **{edit_cust['full_name']}**")
                             
-                            with st.form(key=f"form_edit_{current_edit_id}"):
+                            with st.form(key=f"form_edit_cust"):
                                 new_name = st.text_input("Sửa Họ và Tên:", value=edit_cust["full_name"])
                                 new_phone = st.text_input("Sửa Số điện thoại:", value=edit_cust["phone"])
                                 
                                 current_addr = edit_cust.get("address", "")
-                                st.caption(f"Địa chỉ hiện tại đang lưu: **{current_addr}**")
+                                st.caption(f"Địa chỉ hiện tại: **{current_addr}**")
                                 
                                 is_hcm_addr = current_addr in DANH_SACH_QUAN_HCM
                                 default_hcm_idx = DANH_SACH_QUAN_HCM.index(current_addr) if is_hcm_addr else 0
                                 
-                                st.write("**Thay đổi địa chỉ mới (Chọn 1 trong 2):**")
-                                new_hcm_addr = st.selectbox("1. Nếu ở TP.HCM, hãy chọn quận dưới đây:", ["-- Khách không ở TP.HCM --"] + DANH_SACH_QUAN_HCM, index=(default_hcm_idx + 1 if is_hcm_addr else 0))
-                                new_other_addr = st.text_input("2. Hoặc nhập Tỉnh/Thành phố khác (Hệ thống sẽ ưu tiên lấy ô này nếu có ghi):", value="" if is_hcm_addr else current_addr)
+                                st.write("**Thay đổi địa chỉ mới:**")
+                                new_hcm_addr = st.selectbox("1. Nếu ở TP.HCM, chọn tại đây:", ["-- Khách không ở TP.HCM --"] + DANH_SACH_QUAN_HCM, index=(default_hcm_idx + 1 if is_hcm_addr else 0))
+                                new_other_addr = st.text_input("2. Hoặc nhập Tỉnh/Thành phố khác:", value="" if is_hcm_addr else current_addr)
                                 
                                 submit_edit = st.form_submit_button("💾 Lưu thay đổi", type="primary")
                                 
@@ -235,21 +226,18 @@ if st.session_state.is_admin_mode:
                                         else:
                                             final_edited_address = "Chưa cập nhật"
                                             
-                                        try:
-                                            supabase.table("customers").update({
-                                                "full_name": new_name.strip(), 
-                                                "phone": new_phone.strip(),
-                                                "address": final_edited_address
-                                            }).eq("id", current_edit_id).execute()
-                                            st.session_state.editing_customer_id = None
-                                            st.rerun()
-                                        except Exception as e:
-                                            st.error(f"Lỗi hệ thống: {e}")
+                                        supabase.table("customers").update({
+                                            "full_name": new_name.strip(), 
+                                            "phone": new_phone.strip(),
+                                            "address": final_edited_address
+                                        }).eq("id", current_edit_id).execute()
+                                        
+                                        st.session_state.editing_customer_id = None
+                                        st.rerun()
                                     else:
                                         st.error("Không được để trống Tên hoặc Số điện thoại!")
                             
-                            # Nút hủy đặt ngoài form để đóng nhanh
-                            if st.button("❌ Hủy bỏ (Đóng khung sửa)"):
+                            if st.button("❌ Đóng Form Sửa"):
                                 st.session_state.editing_customer_id = None
                                 st.rerun()
                             st.write("---")
@@ -261,23 +249,15 @@ if st.session_state.is_admin_mode:
                             addr_display = cust.get("address") if cust.get("address") else "Chưa cập nhật địa chỉ"
                             
                             c_col1.markdown(f"👤 Tên khách: **{cust['full_name']}**")
-                            c_col1.markdown(f"📱 SĐT: `{cust['phone']}` | 🏠 Địa chỉ: ` {addr_display} `")
+                            c_col1.markdown(f"📱 SĐT: `{cust['phone']}` | 🏠 Đ/C: ` {addr_display} `")
                             
                             if c_col2.button("✏️ Sửa", key=f"edit_cust_{cust['id']}", use_container_width=True):
                                 st.session_state.editing_customer_id = cust["id"]
                                 st.rerun()
                                 
-                            # Tính năng xóa an toàn có bẫy lỗi hiển thị
                             if c_col3.button("🗑️ Xóa", key=f"del_cust_{cust['id']}", type="secondary", use_container_width=True):
-                                try:
-                                    supabase.table("customers").delete().eq("id", cust["id"]).execute()
-                                    st.toast(f"❌ Đã xóa tài khoản: {cust['full_name']}")
-                                    st.rerun()
-                                except Exception as e:
-                                    if "foreign key constraint" in str(e).lower():
-                                        st.error("❌ Lỗi: Khách này đang có lịch hẹn. Hãy chạy lệnh CASCADE trên Supabase trước khi xóa.")
-                                    else:
-                                        st.error(f"❌ Lỗi: {e}")
+                                supabase.table("customers").delete().eq("id", cust["id"]).execute()
+                                st.rerun()
 
         # ---- TAB 3: QUẢN LÝ LỊCH HẸN & ĐIỂM DANH ----
         with tab3:
@@ -317,9 +297,8 @@ if st.session_state.is_admin_mode:
                                 c3.markdown(f"[💬 Nhắc Zalo](https://zalo.me/{cust_info['phone']})")
                                 c3.code(msg, language="text")
 
-
 # =========================================================================
-# LUỒNG 2: GIAO DIỆN KHÁCH HÀNG (MẶC ĐỊNH SANG TRỌNG ĐỘC QUYỀN)
+# LUỒNG 2: GIAO DIỆN KHÁCH HÀNG
 # =========================================================================
 else:
     from streamlit_calendar import calendar
