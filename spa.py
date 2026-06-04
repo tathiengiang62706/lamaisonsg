@@ -11,6 +11,7 @@ try:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 except Exception:
+    # Điền thông tin dự án thật của bạn vào đây nếu chạy dưới máy tính (Local)
     SUPABASE_URL = "https://geowicafkaoqsqkajpae.supabase.co"
     SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdlb3dpY2Fma2FvcXNxa2FqcGFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjE1NzUsImV4cCI6MjA5NjAzNzU3NX0.MAJM-OLfKU1qHdQvz_4iXHT0HfFv0QpuKAxlIUdcCdc"
 
@@ -24,6 +25,7 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
+# Cấu hình hiển thị trang của Streamlit
 st.set_page_config(page_title="Private Spa Booking System", layout="wide")
 
 if "logged_in" not in st.session_state:
@@ -31,15 +33,14 @@ if "logged_in" not in st.session_state:
 if "current_role" not in st.session_state:
     st.session_state.current_role = "Khách Hàng"
 
+# Định nghĩa gói dịch vụ độc quyền duy nhất của Spa
 DUY_NHAT_SERVICE = "Chăm sóc da mặt chuyên sâu"
 
 # Hàm sinh file lịch .ics để add thẳng vào iPhone
 def generate_ics_download_link(summary, start_dt, end_dt):
-    # Định dạng thời gian chuẩn iCalendar (YYYYMMDDTHMMSSZ)
     s_str = start_dt.strftime("%Y%m%dT%H%M%SZ")
     e_str = end_dt.strftime("%Y%m%dT%H%M%SZ")
     
-    # Nội dung file cấu hình cấu trúc lịch Apple/Outlook
     ics_content = f"""BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Private Spa//NONSGML Event//EN
@@ -52,7 +53,6 @@ STATUS:CONFIRMED
 END:VEVENT
 END:VCALENDAR"""
     
-    # Mã hóa nội dung sang Base64 để Streamlit có thể tạo nút tải/mở trực tiếp
     b64 = base64.b64encode(ics_content.encode('utf-8')).decode()
     href = f'<a href="data:text/calendar;charset=utf-8;base64,{b64}" download="lich_hen_spa.ics" style="display: inline-block; padding: 10px 20px; background-color: #007aff; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 10px;">📅 Thêm Vào Lịch iPhone (Apple Calendar)</a>'
     return href
@@ -72,6 +72,7 @@ with col_menu2:
         st.rerun()
 
 st.write("---")
+
 
 # -------------------------------------------------------------------------
 # PHẦN A: GIAO DIỆN CHỦ SPA (ADMIN)
@@ -97,11 +98,12 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
             st.session_state.logged_in = False
             st.rerun()
             
-        tab1, tab2, tab3 = st.tabs(["➕ Tạo & Xóa Lịch Trống (75p)", "👤 Tạo Tài Khoản Khách Hàng", "📋 Quản Lý Lịch Hẹn & Điểm Danh"])
+        tab1, tab2, tab3 = st.tabs(["➕ Tạo & Xóa Lịch Trống (90p)", "👤 Tạo Tài Khoản Khách Hàng", "📋 Quản Lý Lịch Hẹn & Điểm Danh"])
         
-# ---- TAB 1: TẠO KHUNG GIỜ TRỐNG & QUẢN LÝ XÓA LỊCH ----
+        # ---- TAB 1: TẠO KHUNG GIỜ TRỐNG & QUẢN LÝ XÓA LỊCH ----
         with tab1:
             st.markdown("#### Tạo khung giờ mở cửa cho Spa")
+            st.caption("💡 Hệ thống tự động tính: **90 phút trọn gói** (75 phút làm mặt + 15 phút dọn dẹp phòng).")
             col_t1, col_t2 = st.columns(2)
             with col_t1:
                 date = st.date_input("Chọn ngày làm việc", datetime.today(), key="adm_date")
@@ -110,7 +112,8 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                 
             if st.button("Xác Nhận Tạo Khung Giờ", type="primary", key="btn_create_slot"):
                 start_dt = datetime.combine(date, start_time)
-                end_dt = start_dt + timedelta(minutes=75)
+                # Đã cập nhật: 75 phút làm dịch vụ + 15 phút nghỉ dọn dẹp = 90 phút trọn gói
+                end_dt = start_dt + timedelta(minutes=90)
                 
                 data = {"start_time": start_dt.isoformat(), "end_time": end_dt.isoformat(), "status": "available"}
                 if supabase:
@@ -120,10 +123,9 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
 
             st.write("---")
             st.markdown("#### 📋 Danh sách các khung giờ đã tạo")
-            st.caption("💡 Mẹo: Bạn có thể kiểm tra các slot đã tạo tại đây và ấn nút **Xóa lịch** màu đỏ nếu lỡ tạo nhầm.")
             
             if supabase:
-                # ĐÃ SỬA LỖI TẠI ĐÂY: Bỏ descending=False để chạy chuẩn mọi phiên bản Supabase
+                # Đã sửa lỗi: Bỏ descending để tương thích 100% các bản Supabase
                 all_slots_res = supabase.table("slots").select("*").order("start_time").execute()
                 all_slots = all_slots_res.data if all_slots_res.data else []
                 
@@ -153,6 +155,7 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                                 supabase.table("slots").delete().eq("id", s["id"]).execute()
                                 st.rerun()
 
+        # ---- TAB 2: TẠO TÀI KHOẢN KHÁCH HÀNG ----
         with tab2:
             st.markdown("#### Tạo tài khoản mới cho khách hàng")
             with st.container(border=True):
@@ -177,6 +180,7 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                     for cust in cust_res.data:
                         st.write(f"• 👤 **{cust['full_name']}** - SĐT: `{cust['phone']}`")
 
+        # ---- TAB 3: XEM LỊCH & ĐIỂM DANH (CÓ THAM GIA / KHÔNG THAM GIA) ----
         with tab3:
             st.markdown("#### Quản lý danh sách đặt lịch và điểm danh khách đến")
             if supabase:
@@ -193,6 +197,8 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                             start_obj = datetime.fromisoformat(slot_info["start_time"])
                             end_obj = datetime.fromisoformat(slot_info["end_time"])
                             view_admin_time = f"{start_obj.strftime('%H:%M')} - {end_obj.strftime('%H:%M')} ngày {start_obj.strftime('%d/%m/%Y')}"
+                            
+                            # Tin nhắn gửi cho khách chỉ hiển thị mốc giờ bắt đầu đón khách
                             zalo_msg_time = f"{start_obj.strftime('%H:%M')} ngày {start_obj.strftime('%d/%m/%Y')}"
                             
                             current_status = b.get("status", "confirmed")
@@ -228,6 +234,7 @@ else:
 
     tab_cust1, tab_cust2 = st.tabs(["✨ ĐẶT LỊCH HẸN MỚI", "📋 LỊCH SỬ BUỔI HẸN ĐÃ THAM GIA"])
 
+    # ---- TAB KHÁCH 1: ĐẶT LỊCH MỚI (GIAO DIỆN LỊCH THÁNG KHÔNG LỖI CHỮ) ----
     with tab_cust1:
         if supabase:
             slot_res = supabase.table("slots").select("*").eq("status", "available").order("start_time").execute()
@@ -236,15 +243,17 @@ else:
             if not available_slots:
                 st.warning("Hiện tại Spa đã kín lịch hoặc chưa mở thêm khung giờ trống mới. Bạn vui lòng quay lại sau nhé!")
             else:
-                st.info(f"Spa hiện cung cấp dịch vụ độc quyền: **{DUY_NHAT_SERVICE}** (Thời lượng: 75 phút)")
+                st.info(f"Spa hiện cung cấp dịch vụ độc quyền: **{DUY_NHAT_SERVICE}** (Thời lượng: 75 phút làm dịch vụ)")
                 st.markdown("### 📅 Chọn mốc giờ trống trực tiếp trên bộ lịch tháng")
-                st.caption("💡 Mẹo trên iPhone: Chạm nhẹ vào **Ô mốc giờ màu xanh** trong ngày bạn muốn hẹn.")
+                st.caption("💡 Mẹo trên điện thoại: Hãy chạm nhẹ vào **Ô mốc giờ màu xanh** trong ngày bạn muốn hẹn để đăng ký.")
 
+                # Chuyển đổi dữ liệu sang định dạng FullCalendar
                 calendar_events = []
                 for slot in available_slots:
                     start_obj = datetime.fromisoformat(slot["start_time"])
                     calendar_events.append({
                         "id": str(slot["id"]),
+                        # Đã sửa: Chỉ hiện duy nhất Giờ:Phút bắt đầu để tránh bị lặp đè chữ số hệ thống
                         "title": f"{start_obj.strftime('%H:%M')}",
                         "start": slot["start_time"],
                         "end": slot["end_time"],
@@ -252,8 +261,18 @@ else:
                         "textColor": "#ffffff"
                     })
 
-                calendar_options = {"initialView": "dayGridMonth", "headerToolbar": {"left": "prev,next", "center": "title", "right": ""}, "locale": "vi", "selectable": True, "contentHeight": "auto"}
+                # Cấu hình FullCalendar
+                calendar_options = {
+                    "initialView": "dayGridMonth",
+                    "headerToolbar": {"left": "prev,next", "center": "title", "right": ""},
+                    "locale": "vi",
+                    "selectable": True,
+                    "contentHeight": "auto",
+                    # Đã sửa: Tắt hiển thị mốc giờ tự động của thư viện lịch để xóa sạch số thừa vỡ khung
+                    "displayEventTime": False 
+                }
                 
+                # CSS tối ưu bẻ dòng hiển thị dạng nút thuốc (Badge) gọn gàng trên cả Mobile lẫn PC
                 custom_css = """
                     .fc .fc-daygrid-body { width: 100% !important; }
                     .fc-daygrid-day-number { color: #222 !important; font-weight: bold !important; font-size: 14px !important; }
@@ -280,6 +299,7 @@ else:
                     
                     st.write("---")
                     st.markdown("### 📝 Bước cuối: Xác nhận tài khoản và đặt lịch")
+                    # Hiển thị đúng khoảng giờ từ database (đã cộng 90 phút trọn gói)
                     st.success(f"🎯 Bạn đang chọn: Khung giờ **{st_obj.strftime('%H:%M')} - {en_obj.strftime('%H:%M')}** ngày **{st_obj.strftime('%d/%m/%Y')}**")
                     
                     with st.container(border=True):
@@ -304,15 +324,16 @@ else:
                                     st.balloons()
                                     st.success(f"🎉 Xin chúc mừng {info_khach['full_name']}! Bạn đã đặt lịch hẹn thành công.")
                                     
-                                    # TẠO NÚT BẤM APPLE CALENDAR CHO IPHONE (.ICS)
+                                    # Tạo nút bấm Apple Calendar cho iPhone (.ics) lý tưởng cho khách nữ
                                     summary_text = f"Lịch hẹn Spa - {DUY_NHAT_SERVICE}"
                                     ics_button_html = generate_ics_download_link(summary_text, st_obj, en_obj)
                                     
-                                    st.markdown("👇 Khách hàng dùng iPhone hãy ấn nút dưới đây để lưu lịch vào máy:")
+                                    st.markdown("👇 Bạn dùng điện thoại iPhone hãy ấn nút dưới đây để lưu lịch nhanh vào máy:")
                                     st.markdown(ics_button_html, unsafe_allow_html=True)
                 else:
                     st.warning("👈 Vui lòng bấm chọn trực tiếp vào một ô **Mốc Giờ màu xanh** trên bảng lịch tháng ở trên để bắt đầu điền thông tin.")
 
+    # ---- TAB KHÁCH 2: XEM LỊCH SỬ ĐÃ THAM GIA ----
     with tab_cust2:
         st.markdown("#### Xem lịch sử các buổi làm Spa của bạn")
         search_phone = st.text_input("Nhập số điện thoại tài khoản của bạn để tra cứu lịch sử:", key="history_phone_input")
