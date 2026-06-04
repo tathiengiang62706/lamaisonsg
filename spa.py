@@ -99,6 +99,7 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
             
         tab1, tab2, tab3 = st.tabs(["➕ Tạo & Xóa Lịch Trống (75p)", "👤 Tạo Tài Khoản Khách Hàng", "📋 Quản Lý Lịch Hẹn & Điểm Danh"])
         
+# ---- TAB 1: TẠO KHUNG GIỜ TRỐNG & QUẢN LÝ XÓA LỊCH ----
         with tab1:
             st.markdown("#### Tạo khung giờ mở cửa cho Spa")
             col_t1, col_t2 = st.columns(2)
@@ -119,9 +120,11 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
 
             st.write("---")
             st.markdown("#### 📋 Danh sách các khung giờ đã tạo")
+            st.caption("💡 Mẹo: Bạn có thể kiểm tra các slot đã tạo tại đây và ấn nút **Xóa lịch** màu đỏ nếu lỡ tạo nhầm.")
             
             if supabase:
-                all_slots_res = supabase.table("slots").select("*").order("start_time", descending=False).execute()
+                # ĐÃ SỬA LỖI TẠI ĐÂY: Bỏ descending=False để chạy chuẩn mọi phiên bản Supabase
+                all_slots_res = supabase.table("slots").select("*").order("start_time").execute()
                 all_slots = all_slots_res.data if all_slots_res.data else []
                 
                 if not all_slots:
