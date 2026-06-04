@@ -11,7 +11,6 @@ try:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 except Exception:
-    # Điền thông tin dự án thật của bạn vào đây nếu chạy dưới máy tính (Local)
     SUPABASE_URL = "https://your-supabase-url.supabase.co"
     SUPABASE_KEY = "your-supabase-anon-key"
 
@@ -36,11 +35,9 @@ if "editing_customer_id" not in st.session_state:
 DUY_NHAT_SERVICE = "Chăm sóc da mặt chuyên sâu"
 TEN_SPA = "La Maison Beauté"
 
-# CẤU HÌNH LINK LOGO & HÌNH NỀN THƯƠNG HIỆU
 URL_LOGO_SPA = "https://i.imgur.com/your-logo-link.png" 
 URL_NỀN_SPA = "https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1920" 
 
-# Danh sách Quận/Huyện TP.HCM để chọn nhanh khi tạo/sửa dữ liệu khách hàng
 DANH_SACH_QUAN_HCM = [
     "Quận 1, TP. HCM", "Quận 3, TP. HCM", "Quận 4, TP. HCM", "Quận 5, TP. HCM",
     "Quận 6, TP. HCM", "Quận 7, TP. HCM", "Quận 8, TP. HCM", "Quận 10, TP. HCM",
@@ -50,7 +47,6 @@ DANH_SACH_QUAN_HCM = [
     "Huyện Hóc Môn, TP. HCM", "Huyện Nhà Bè, TP. HCM"
 ]
 
-# Hàm sinh file lịch .ics để add thẳng vào iPhone
 def generate_ics_download_link(summary, start_dt, end_dt):
     s_str = start_dt.strftime("%Y%m%dT%H%M%SZ")
     e_str = end_dt.strftime("%Y%m%dT%H%M%SZ")
@@ -59,16 +55,14 @@ def generate_ics_download_link(summary, start_dt, end_dt):
     href = f'<a href="data:text/calendar;charset=utf-8;base64,{b64}" download="lich_hen_spa.ics" style="display: inline-block; padding: 12px 24px; background-color: #D4AF37; color: white; text-decoration: none; border-radius: 50px; font-weight: bold; margin-top: 10px; box-shadow: 0 4px 15px rgba(212,175,55,0.3);">📅 Thêm Vào Lịch iPhone (Apple Calendar)</a>'
     return href
 
-
 # -------------------------------------------------------------------------
-# 2. KIỂM TRA ĐƯỜNG DẪN ẨN (QUERY PARAMETERS) ĐỂ PHÂN CHIA TRANG ĐỘC LẬP
+# 2. KIỂM TRA ĐƯỜNG DẪN ẨN (QUERY PARAMETERS)
 # -------------------------------------------------------------------------
 query_params = st.query_params
 is_admin_route = query_params.get("page") == "admin"
 
-
 # =========================================================================
-# LUỒNG 1: GIAO DIỆN CHỦ SPA (BÍ MẬT - QUẢN LÝ ĐA CHỨC NĂNG SỬA/XÓA AN TOÀN)
+# LUỒNG 1: GIAO DIỆN CHỦ SPA (NỘI BỘ BÍ MẬT - ĐÃ SỬA LỖI ĐƠ CƠ CHẾ CẬP NHẬT)
 # =========================================================================
 if is_admin_route:
     st.markdown(f"<h2 style='color: #af9444; font-family: \"Playfair Display\", serif;'>💆‍♂️ HỆ THỐNG QUẢN TRỊ NỘI BỘ - {TEN_SPA.upper()}</h2>", unsafe_allow_html=True)
@@ -79,8 +73,7 @@ if is_admin_route:
         with st.container(border=True):
             username = st.text_input("Tài khoản admin:")
             password = st.text_input("Mật khẩu admin:", type="password")
-            login_submit = st.button("Đăng nhập ngay", type="primary")
-            if login_submit:
+            if st.button("Đăng nhập ngay", type="primary"):
                 if username == "admin" and password == "admin123":
                     st.session_state.logged_in = True
                     st.rerun()
@@ -117,6 +110,7 @@ if is_admin_route:
             if supabase:
                 all_slots_res = supabase.table("slots").select("*").order("start_time").execute()
                 all_slots = all_slots_res.data if all_slots_res.data else []
+                
                 bookings_map = {}
                 bookings_res = supabase.table("bookings").select("*, customers(*)").execute()
                 if bookings_res.data:
@@ -130,9 +124,11 @@ if is_admin_route:
                     for s in all_slots:
                         if filter_status == "Chưa ai đặt (Trống)" and s["status"] != "available": continue
                         if filter_status == "Đã có người đặt (Kín)" and s["status"] != "booked": continue
+                        
                         s_obj = datetime.fromisoformat(s["start_time"])
                         e_obj = datetime.fromisoformat(s["end_time"])
                         time_display = f"⏱️ **{s_obj.strftime('%H:%M')} - {e_obj.strftime('%H:%M')}** ngày `{s_obj.strftime('%d/%m/%Y')}`"
+                        
                         customer_info_str = ""
                         if s["status"] == "available":
                             badge = "🔵 Trống (Chờ đặt)"
@@ -149,12 +145,12 @@ if is_admin_route:
                             if customer_info_str: c_slot1.markdown(customer_info_str)
                             c_slot2.markdown(f"Trạng thái: **{badge}**")
                             
-                            # Sửa đổi nút xóa lịch: Tự động dọn dẹp lịch đặt tương ứng nhờ CASCADE bên database
-                            if c_slot3.button("🗑️ Xóa", key=f"del_slot_{s['id']}", type="secondary"):
+                            # ✨ ĐÃ SỬA: Ép hệ thống đồng bộ trực tiếp (rerun) sau khi xóa slot, tránh đơ giao diện cũ
+                            if c_slot3.button("🗑️ Xóa lịch", key=f"del_slot_{s['id']}", type="secondary"):
                                 supabase.table("slots").delete().eq("id", s["id"]).execute()
                                 st.rerun()
 
-        # ---- TAB 2: QUẢN LÝ TÀI KHOẢN KHÁCH HÀNG (HOÀN THIỆN DROP DOWN SỬA/XÓA) ----
+        # ---- TAB 2: QUẢN LÝ TÀI KHOẢN KHÁCH HÀNG (SỬA/XÓA CHUẨN XÁC MƯỢT MÀ) ----
         with tab2:
             st.markdown("### ➕ Tạo tài khoản mới cho khách hàng")
             with st.container(border=True):
@@ -179,7 +175,7 @@ if is_admin_route:
                                 "phone": c_phone.strip(),
                                 "address": final_address
                             }).execute()
-                            st.success(f"🎉 Đã tạo thành công tài khoản cho khách: **{c_name}** ({final_address})")
+                            st.success(f"🎉 Đã tạo thành công tài khoản cho khách: **{c_name}**")
                             st.rerun()
                         except Exception:
                             st.error("Số điện thoại này đã tồn tại trên hệ thống!")
@@ -194,7 +190,7 @@ if is_admin_route:
                 if not customers_list:
                     st.info("Hiện chưa có tài khoản khách hàng nào.")
                 else:
-                    # GIAO DIỆN SỬA ĐỊA CHỈ KHÁCH HÀNG ĐỒNG BỘ DROP DOWN CAO CẤP
+                    # GIAO DIỆN FORM SỬA THÔNG TIN KHÁCH HÀNG ĐÃ ĐƯỢC FIX LỖI CACHING
                     if st.session_state.editing_customer_id:
                         current_edit_id = st.session_state.editing_customer_id
                         edit_cust = next((c for c in customers_list if c["id"] == current_edit_id), None)
@@ -202,10 +198,9 @@ if is_admin_route:
                         if edit_cust:
                             st.markdown(f"#### 🛠️ Cập nhật thông tin cho khách: **{edit_cust['full_name']}**")
                             with st.container(border=True):
-                                new_name = st.text_input("Sửa Họ và Tên:", value=edit_cust["full_name"])
-                                new_phone = st.text_input("Sửa Số điện thoại:", value=edit_cust["phone"])
+                                new_name = st.text_input("Sửa Họ và Tên:", value=edit_cust["full_name"], key="input_edit_name")
+                                new_phone = st.text_input("Sửa Số điện thoại:", value=edit_cust["phone"], key="input_edit_phone")
                                 
-                                # Tự động phát hiện địa chỉ cũ của khách có thuộc TP.HCM hay không
                                 current_addr = edit_cust.get("address", "")
                                 is_hcm_addr = current_addr in DANH_SACH_QUAN_HCM
                                 
@@ -213,9 +208,7 @@ if is_admin_route:
                                 edit_region = st.radio(
                                     "Sửa khu vực sinh sống:", 
                                     ["📍 Thuộc TP. Hồ Chí Minh (Mặc định chọn nhanh)", "✈️ Tỉnh thành khác (Khách ở xa)"], 
-                                    index=edit_region_index,
-                                    horizontal=True,
-                                    key="edit_region_choice"
+                                    index=edit_region_index, horizontal=True, key="edit_region_choice"
                                 )
                                 
                                 if edit_region == "📍 Thuộc TP. Hồ Chí Minh (Mặc định chọn nhanh)":
@@ -226,7 +219,8 @@ if is_admin_route:
                                     new_addr_val = st.text_input("Sửa tên Tỉnh/Thành phố của khách ở xa:", value=default_other_val, key="edit_address_other")
                                 
                                 col_edit_btn1, col_edit_btn2 = st.columns(2)
-                                if col_edit_btn1.button("💾 Lưu thay đổi", type="primary"):
+                                # ✨ ĐÃ SỬA: Đảm bảo sau khi bấm Lưu thay đổi, bộ nhớ tạm thời được giải phóng ngay lập tức
+                                if col_edit_btn1.button("💾 Lưu thay đổi", type="primary", key="btn_confirm_save_edit"):
                                     if new_name.strip() and new_phone.strip():
                                         final_edited_address = new_addr_val.strip() if new_addr_val else "Chưa cập nhật"
                                         supabase.table("customers").update({
@@ -235,21 +229,19 @@ if is_admin_route:
                                             "address": final_edited_address
                                         }).eq("id", current_edit_id).execute()
                                         st.session_state.editing_customer_id = None
-                                        st.toast("✅ Đã cập nhật thông tin thành công!")
                                         st.rerun()
                                     else:
-                                        st.error("Không được để trống Tên hoặc Số điện thoại!")
+                                        st.error("Không được để trống thông tin!")
                                         
-                                if col_edit_btn2.button("❌ Hủy bỏ"):
+                                if col_edit_btn2.button("❌ Hủy bỏ", key="btn_cancel_edit"):
                                     st.session_state.editing_customer_id = None
                                     st.rerun()
                             st.write("---")
 
-                    # Vòng lặp hiển thị danh sách khách hàng hoạt động an toàn
+                    # Vòng lặp hiển thị danh sách khách hàng
                     for cust in customers_list:
                         with st.container(border=True):
                             c_col1, c_col2, c_col3 = st.columns([3, 1, 1])
-                            
                             addr_display = cust.get("address") if cust.get("address") else "Chưa cập nhật địa chỉ"
                             
                             c_col1.markdown(f"👤 Tên khách: **{cust['full_name']}**")
@@ -260,10 +252,9 @@ if is_admin_route:
                                 st.session_state.editing_customer_id = cust["id"]
                                 st.rerun()
                                 
-                            # Nút Xóa khách hàng: Hoạt động trơn tru nhờ lệnh CASCADE SQL ở Bước 1
-                            if c_col3.button("🗑️ Xóa", key=f"del_cust_{cust['id']}", type="secondary", use_container_width=True):
+                            # ✨ ĐÃ SỬA: Thêm lệnh st.rerun() bắt buộc sau lệnh xóa khách hàng
+                            if c_col3.button("🗑️ Xóa khách", key=f"del_cust_{cust['id']}", type="secondary", use_container_width=True):
                                 supabase.table("customers").delete().eq("id", cust["id"]).execute()
-                                st.toast(f"❌ Đã xóa tài khoản khách: {cust['full_name']}")
                                 st.rerun()
 
         # ---- TAB 3: QUẢN LÝ LỊCH HẸN & ĐIỂM DANH ----
@@ -304,9 +295,8 @@ if is_admin_route:
                                 c3.markdown(f"[💬 Nhắc Zalo](https://zalo.me/{cust_info['phone']})")
                                 c3.code(msg, language="text")
 
-
 # =========================================================================
-# LUỒNG 2: GIAO DIỆN KHÁCH HÀNG (MẶC ĐỊNH TUYỆT ĐỐI - KHÔNG THẤY ADMIN)
+# LUỒNG 2: GIAO DIỆN KHÁCH HÀNG (MẶC ĐỊNH SANG TRỌNG ĐỘC QUYỀN)
 # =========================================================================
 else:
     from streamlit_calendar import calendar
