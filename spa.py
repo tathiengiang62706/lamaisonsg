@@ -12,8 +12,8 @@ try:
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 except Exception:
     # Điền thông tin dự án thật của bạn vào đây nếu chạy dưới máy tính (Local)
-    SUPABASE_URL = "https://geowicafkaoqsqkajpae.supabase.co"
-    SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdlb3dpY2Fma2FvcXNxa2FqcGFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NjE1NzUsImV4cCI6MjA5NjAzNzU3NX0.MAJM-OLfKU1qHdQvz_4iXHT0HfFv0QpuKAxlIUdcCdc"
+    SUPABASE_URL = "https://your-supabase-url.supabase.co"
+    SUPABASE_KEY = "your-supabase-anon-key"
 
 @st.cache_resource
 def init_supabase():
@@ -112,7 +112,7 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                 
             if st.button("Xác Nhận Tạo Khung Giờ", type="primary", key="btn_create_slot"):
                 start_dt = datetime.combine(date, start_time)
-                # Đã cập nhật: 75 phút làm dịch vụ + 15 phút nghỉ dọn dẹp = 90 phút trọn gói
+                # 75 phút làm dịch vụ + 15 phút nghỉ dọn dẹp = 90 phút trọn gói
                 end_dt = start_dt + timedelta(minutes=90)
                 
                 data = {"start_time": start_dt.isoformat(), "end_time": end_dt.isoformat(), "status": "available"}
@@ -125,7 +125,6 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
             st.markdown("#### 📋 Danh sách các khung giờ đã tạo")
             
             if supabase:
-                # Đã sửa lỗi: Bỏ descending để tương thích 100% các bản Supabase
                 all_slots_res = supabase.table("slots").select("*").order("start_time").execute()
                 all_slots = all_slots_res.data if all_slots_res.data else []
                 
@@ -180,7 +179,7 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                     for cust in cust_res.data:
                         st.write(f"• 👤 **{cust['full_name']}** - SĐT: `{cust['phone']}`")
 
-        # ---- TAB 3: XEM LỊCH & ĐIỂM DANH (CÓ THAM GIA / KHÔNG THAM GIA) ----
+        # ---- TAB 3: XEM LỊCH & ĐIỂM DANH ----
         with tab3:
             st.markdown("#### Quản lý danh sách đặt lịch và điểm danh khách đến")
             if supabase:
@@ -197,8 +196,6 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                             start_obj = datetime.fromisoformat(slot_info["start_time"])
                             end_obj = datetime.fromisoformat(slot_info["end_time"])
                             view_admin_time = f"{start_obj.strftime('%H:%M')} - {end_obj.strftime('%H:%M')} ngày {start_obj.strftime('%d/%m/%Y')}"
-                            
-                            # Tin nhắn gửi cho khách chỉ hiển thị mốc giờ bắt đầu đón khách
                             zalo_msg_time = f"{start_obj.strftime('%H:%M')} ngày {start_obj.strftime('%d/%m/%Y')}"
                             
                             current_status = b.get("status", "confirmed")
@@ -234,7 +231,7 @@ else:
 
     tab_cust1, tab_cust2 = st.tabs(["✨ ĐẶT LỊCH HẸN MỚI", "📋 LỊCH SỬ BUỔI HẸN ĐÃ THAM GIA"])
 
-    # ---- TAB KHÁCH 1: ĐẶT LỊCH MỚI (GIAO DIỆN LỊCH THÁNG KHÔNG LỖI CHỮ) ----
+    # ---- TAB KHÁCH 1: ĐẶT LỊCH MỚI ----
     with tab_cust1:
         if supabase:
             slot_res = supabase.table("slots").select("*").eq("status", "available").order("start_time").execute()
@@ -243,17 +240,15 @@ else:
             if not available_slots:
                 st.warning("Hiện tại Spa đã kín lịch hoặc chưa mở thêm khung giờ trống mới. Bạn vui lòng quay lại sau nhé!")
             else:
-                st.info(f"Spa hiện cung cấp dịch vụ độc quyền: **{DUY_NHAT_SERVICE}** (Thời lượng: 75 phút làm dịch vụ)")
+                st.info(f"Spa hiện cung cấp dịch vụ độc quyền: **{DUY_NHAT_SERVICE}**")
                 st.markdown("### 📅 Chọn mốc giờ trống trực tiếp trên bộ lịch tháng")
                 st.caption("💡 Mẹo trên điện thoại: Hãy chạm nhẹ vào **Ô mốc giờ màu xanh** trong ngày bạn muốn hẹn để đăng ký.")
 
-                # Chuyển đổi dữ liệu sang định dạng FullCalendar
                 calendar_events = []
                 for slot in available_slots:
                     start_obj = datetime.fromisoformat(slot["start_time"])
                     calendar_events.append({
                         "id": str(slot["id"]),
-                        # Đã sửa: Chỉ hiện duy nhất Giờ:Phút bắt đầu để tránh bị lặp đè chữ số hệ thống
                         "title": f"{start_obj.strftime('%H:%M')}",
                         "start": slot["start_time"],
                         "end": slot["end_time"],
@@ -261,18 +256,15 @@ else:
                         "textColor": "#ffffff"
                     })
 
-                # Cấu hình FullCalendar
                 calendar_options = {
                     "initialView": "dayGridMonth",
                     "headerToolbar": {"left": "prev,next", "center": "title", "right": ""},
                     "locale": "vi",
                     "selectable": True,
                     "contentHeight": "auto",
-                    # Đã sửa: Tắt hiển thị mốc giờ tự động của thư viện lịch để xóa sạch số thừa vỡ khung
                     "displayEventTime": False 
                 }
                 
-                # CSS tối ưu bẻ dòng hiển thị dạng nút thuốc (Badge) gọn gàng trên cả Mobile lẫn PC
                 custom_css = """
                     .fc .fc-daygrid-body { width: 100% !important; }
                     .fc-daygrid-day-number { color: #222 !important; font-weight: bold !important; font-size: 14px !important; }
@@ -295,11 +287,11 @@ else:
 
                 if selected_slot:
                     st_obj = datetime.fromisoformat(selected_slot["start_time"])
-                    en_obj = datetime.fromisoformat(selected_slot["end_time"])
+                    # ✨ ĐÃ SỬA LỖI TẠI ĐÂY: Ép giờ kết thúc hiển thị hiển thị chuẩn xác sau 90 phút trọn gói
+                    en_obj = st_obj + timedelta(minutes=90)
                     
                     st.write("---")
                     st.markdown("### 📝 Bước cuối: Xác nhận tài khoản và đặt lịch")
-                    # Hiển thị đúng khoảng giờ từ database (đã cộng 90 phút trọn gói)
                     st.success(f"🎯 Bạn đang chọn: Khung giờ **{st_obj.strftime('%H:%M')} - {en_obj.strftime('%H:%M')}** ngày **{st_obj.strftime('%d/%m/%Y')}**")
                     
                     with st.container(border=True):
@@ -324,7 +316,6 @@ else:
                                     st.balloons()
                                     st.success(f"🎉 Xin chúc mừng {info_khach['full_name']}! Bạn đã đặt lịch hẹn thành công.")
                                     
-                                    # Tạo nút bấm Apple Calendar cho iPhone (.ics) lý tưởng cho khách nữ
                                     summary_text = f"Lịch hẹn Spa - {DUY_NHAT_SERVICE}"
                                     ics_button_html = generate_ics_download_link(summary_text, st_obj, en_obj)
                                     
