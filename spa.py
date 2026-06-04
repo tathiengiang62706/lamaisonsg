@@ -39,6 +39,16 @@ TEN_SPA = "La Maison Beauté"
 URL_LOGO_SPA = "https://i.imgur.com/your-logo-link.png" 
 URL_NỀN_SPA = "https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1920" 
 
+# Danh sách Quận/Huyện TP.HCM để chọn nhanh khi tạo dữ liệu khách hàng
+DANH_SACH_QUAN_HCM = [
+    "Quận 1, TP. HCM", "Quận 3, TP. HCM", "Quận 4, TP. HCM", "Quận 5, TP. HCM",
+    "Quận 6, TP. HCM", "Quận 7, TP. HCM", "Quận 8, TP. HCM", "Quận 10, TP. HCM",
+    "Quận 11, TP. HCM", "Quận 12, TP. HCM", "Quận Bình Tân, TP. HCM", "Quận Bình Thạnh, TP. HCM",
+    "Quận Gò Vấp, TP. HCM", "Quận Phú Nhuận, TP. HCM", "Quận Tân Bình, TP. HCM", "Quận Tân Phú, TP. HCM",
+    "TP. Thủ Đức, TP. HCM", "Huyện Bình Chánh, TP. HCM", "Huyện Cần Giờ, TP. HCM", "Huyện Củ Chi, TP. HCM",
+    "Huyện Hóc Môn, TP. HCM", "Huyện Nhà Bè, TP. HCM"
+]
+
 # Hàm sinh file lịch .ics để add thẳng vào iPhone
 def generate_ics_download_link(summary, start_dt, end_dt):
     s_str = start_dt.strftime("%Y%m%dT%H%M%SZ")
@@ -57,7 +67,7 @@ is_admin_route = query_params.get("page") == "admin"
 
 
 # =========================================================================
-# LUỒNG 1: GIAO DIỆN CHỦ SPA (BÍ MẬT - ĐẦY ĐỦ TÍNH NĂNG SỬA/XÓA KHÁCH HÀNG)
+# LUỒNG 1: GIAO DIỆN CHỦ SPA (BÍ MẬT - QUẢN LÝ ĐỊA CHỈ KHÁCH HÀNG THÔNG MINH)
 # =========================================================================
 if is_admin_route:
     st.markdown(f"<h2 style='color: #af9444; font-family: \"Playfair Display\", serif;'>💆‍♂️ HỆ THỐNG QUẢN TRỊ NỘI BỘ - {TEN_SPA.upper()}</h2>", unsafe_allow_html=True)
@@ -141,17 +151,33 @@ if is_admin_route:
                                 supabase.table("slots").delete().eq("id", s["id"]).execute()
                                 st.rerun()
 
-        # ---- TAB 2: QUẢN LÝ TÀI KHOẢN KHÁCH HÀNG (ĐÃ THÊM DANH SÁCH + SỬA + XÓA) ----
+        # ---- TAB 2: QUẢN LÝ KHÁCH HÀNG (BỔ SUNG THÀNH PHẦN ĐỊA CHỈ QUẬN HCM / TỈNH THÀNH) ----
         with tab2:
             st.markdown("### ➕ Tạo tài khoản mới cho khách hàng")
             with st.container(border=True):
                 c_name = st.text_input("Họ và tên khách hàng:", key="adm_cust_name")
                 c_phone = st.text_input("Số điện thoại khách:", key="adm_cust_phone")
+                
+                # Logic phân loại khu vực thông minh để tạo cực nhanh
+                region_option = st.radio("Khu vực sinh sống của khách:", ["📍 Thuộc TP. Hồ Chí Minh (Mặc định chọn nhanh)", "✈️ Tỉnh thành khác (Khách ở xa)"], horizontal=True)
+                
+                if region_option == "📍 Thuộc TP. Hồ Chí Minh (Mặc định chọn nhanh)":
+                    c_address = st.selectbox("Chọn quận/huyện tại TP.HCM:", DANH_SACH_QUAN_HCM)
+                else:
+                    c_address = st.text_input("Nhập tên Tỉnh/Thành phố hoặc địa chỉ cụ thể của khách ở xa:", placeholder="Ví dụ: TP. Vũng Tàu, Tỉnh Đồng Nai, Bình Dương...")
+                
                 if st.button("Tạo tài khoản khách", type="primary", key="btn_save_cust"):
-                    if c_name and c_phone and supabase:
+                    if not c_name.strip() or not c_phone.strip():
+                        st.error("Vui lòng điền đầy đủ Họ tên và Số điện thoại khách!")
+                    elif supabase:
                         try:
-                            supabase.table("customers").insert({"full_name": c_name, "phone": c_phone.strip()}).execute()
-                            st.success(f"🎉 Đã tạo thành công tài khoản cho khách: **{c_name}**")
+                            final_address = c_address.strip() if c_address else "Chưa cập nhật"
+                            supabase.table("customers").insert({
+                                "full_name": c_name.strip(), 
+                                "phone": c_phone.strip(),
+                                "address": final_address
+                            }).execute()
+                            st.success(f"🎉 Đã tạo thành công tài khoản cho khách: **{c_name}** ({final_address})")
                             st.rerun()
                         except Exception:
                             st.error("Số điện thoại này đã tồn tại trên hệ thống!")
@@ -160,17 +186,15 @@ if is_admin_route:
             st.markdown("### 👤 Danh sách khách hàng hiện có")
             
             if supabase:
-                # Tải toàn bộ danh sách khách hàng từ Database
                 cust_res = supabase.table("customers").select("*").order("full_name").execute()
                 customers_list = cust_res.data if cust_res.data else []
                 
                 if not customers_list:
                     st.info("Hiện chưa có tài khoản khách hàng nào.")
                 else:
-                    # Giao diện ô chỉnh sửa thông tin (Chỉ xuất hiện khi Admin click vào nút Sửa)
+                    # Giao diện ô chỉnh sửa thông tin khách hàng
                     if st.session_state.editing_customer_id:
                         current_edit_id = st.session_state.editing_customer_id
-                        # Tìm thông tin khách đang được chọn để sửa
                         edit_cust = next((c for c in customers_list if c["id"] == current_edit_id), None)
                         
                         if edit_cust:
@@ -178,11 +202,16 @@ if is_admin_route:
                             with st.container(border=True):
                                 new_name = st.text_input("Sửa Họ và Tên:", value=edit_cust["full_name"])
                                 new_phone = st.text_input("Sửa Số điện thoại:", value=edit_cust["phone"])
+                                new_addr = st.text_input("Sửa Địa chỉ:", value=edit_cust.get("address", ""))
                                 
                                 col_edit_btn1, col_edit_btn2 = st.columns(2)
                                 if col_edit_btn1.button("💾 Lưu thay đổi", type="primary"):
                                     if new_name.strip() and new_phone.strip():
-                                        supabase.table("customers").update({"full_name": new_name.strip(), "phone": new_phone.strip()}).eq("id", current_edit_id).execute()
+                                        supabase.table("customers").update({
+                                            "full_name": new_name.strip(), 
+                                            "phone": new_phone.strip(),
+                                            "address": new_addr.strip()
+                                        }).eq("id", current_edit_id).execute()
                                         st.session_state.editing_customer_id = None
                                         st.toast("✅ Đã cập nhật thông tin thành công!")
                                         st.rerun()
@@ -194,21 +223,21 @@ if is_admin_route:
                                     st.rerun()
                             st.write("---")
 
-                    # Vòng lặp in danh sách khách hàng thành từng dòng chỉn chu
+                    # Vòng lặp hiển thị danh sách
                     for cust in customers_list:
                         with st.container(border=True):
                             c_col1, c_col2, c_col3 = st.columns([3, 1, 1])
                             
-                            # Cột 1: Thông tin cơ bản
+                            addr_display = cust.get("address") if cust.get("address") else "Chưa cập nhật địa chỉ"
+                            
                             c_col1.markdown(f"👤 Tên khách: **{cust['full_name']}**")
                             c_col1.markdown(f"📱 Số điện thoại: `{cust['phone']}`")
+                            c_col1.markdown(f"🏠 Địa chỉ khu vực: ` {addr_display} `")
                             
-                            # Cột 2: Nút Sửa thông tin
                             if c_col2.button("✏️ Sửa", key=f"edit_cust_{cust['id']}", use_container_width=True):
                                 st.session_state.editing_customer_id = cust["id"]
                                 st.rerun()
                                 
-                            # Cột 3: Nút Xóa tài khoản
                             if c_col3.button("🗑️ Xóa", key=f"del_cust_{cust['id']}", type="secondary", use_container_width=True):
                                 supabase.table("customers").delete().eq("id", cust["id"]).execute()
                                 st.toast(f"❌ Đã xóa tài khoản khách: {cust['full_name']}")
@@ -236,6 +265,7 @@ if is_admin_route:
                             with st.container(border=True):
                                 c1, c2, c3 = st.columns([2, 2, 1])
                                 c1.markdown(f"👤 **Khách:** {cust_info['full_name']} ({cust_info['phone']})")
+                                c1.markdown(f"🏠 **Địa chỉ:** {cust_info.get('address', 'Chưa cập nhật')}")
                                 c1.markdown(f"Trạng thái: **{status_label}**")
                                 c2.markdown(f"🕒 **Thời gian:** {view_admin_time}")
                                 if current_status == "confirmed":
