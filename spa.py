@@ -25,8 +25,8 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
-# Cấu hình hiển thị trang của Streamlit
-st.set_page_config(page_title="Private Spa Booking System", layout="wide")
+# Cấu hình hiển thị trang của Streamlit - Cập nhật tên thương hiệu mới
+st.set_page_config(page_title="La Maison Beauté - Booking System", layout="wide")
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -35,6 +35,7 @@ if "current_role" not in st.session_state:
 
 # Định nghĩa gói dịch vụ độc quyền duy nhất của Spa
 DUY_NHAT_SERVICE = "Chăm sóc da mặt chuyên sâu"
+TEN_SPA = "La Maison Beauté"
 
 # Hàm sinh file lịch .ics để add thẳng vào iPhone
 def generate_ics_download_link(summary, start_dt, end_dt):
@@ -43,12 +44,12 @@ def generate_ics_download_link(summary, start_dt, end_dt):
     
     ics_content = f"""BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//Private Spa//NONSGML Event//EN
+PRODID:-//{TEN_SPA}//NONSGML Event//EN
 BEGIN:VEVENT
 SUMMARY:{summary}
 DTSTART:{s_str}
 DTEND:{e_str}
-DESCRIPTION:Hẹn gặp bạn tại Private Spa để làm dịch vụ chăm sóc sắc đẹp!
+DESCRIPTION:Hẹn gặp bạn tại {TEN_SPA} để làm dịch vụ chăm sóc sắc đẹp!
 STATUS:CONFIRMED
 END:VEVENT
 END:VCALENDAR"""
@@ -58,7 +59,7 @@ END:VCALENDAR"""
     return href
 
 # --- THANH MENU ĐIỀU HƯỚNG TRÊN CÙNG TRANG WEB ---
-st.markdown("### 🌟 La Maison Beauté")
+st.markdown(f"### 🌟 HỆ THỐNG ĐẶT LỊCH VÀ QUẢN LÝ {TEN_SPA.upper()}")
 col_menu1, col_menu2 = st.columns(2)
 
 with col_menu1:
@@ -79,7 +80,7 @@ st.write("---")
 # -------------------------------------------------------------------------
 if st.session_state.current_role == "Chủ Spa (Admin)":
     if not st.session_state.logged_in:
-        st.subheader("🔑 Đăng nhập quyền quản trị Spa")
+        st.subheader(f"🔑 Đăng nhập quyền quản trị {TEN_SPA}")
         with st.container(border=True):
             username = st.text_input("Tài khoản admin:")
             password = st.text_input("Mật khẩu admin:", type="password")
@@ -93,7 +94,7 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                 else:
                     st.error("Sai tài khoản hoặc mật khẩu!")
     else:
-        st.subheader("⚙️ Khu vực quản trị của Chủ Spa")
+        st.subheader(f"⚙️ Khu vực quản trị của Chủ Spa - {TEN_SPA}")
         if st.button("🚪 Đăng xuất khỏi Admin"):
             st.session_state.logged_in = False
             st.rerun()
@@ -123,10 +124,19 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
 
             st.write("---")
             st.markdown("#### 📋 Danh sách các khung giờ đã tạo")
+            st.caption("💡 Mẹo: Bạn có thể kiểm tra các slot và xem thông tin khách đến ngay tại đây.")
             
             if supabase:
+                # Tải tất cả các slot sắp xếp theo thời gian tăng dần
                 all_slots_res = supabase.table("slots").select("*").order("start_time").execute()
                 all_slots = all_slots_res.data if all_slots_res.data else []
+                
+                # Tải thông tin liên kết người đặt kèm theo để hiển thị trực tiếp (Nếu có)
+                bookings_map = {}
+                bookings_res = supabase.table("bookings").select("*, customers(*)").execute()
+                if bookings_res.data:
+                    for b in bookings_res.data:
+                        bookings_map[b["slot_id"]] = b
                 
                 if not all_slots:
                     st.info("Hiện tại chưa có khung giờ nào được tạo.")
@@ -143,13 +153,30 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                         e_obj = datetime.fromisoformat(s["end_time"])
                         time_display = f"⏱️ **{s_obj.strftime('%H:%M')} - {e_obj.strftime('%H:%M')}** ngày `{s_obj.strftime('%d/%m/%Y')}`"
                         
-                        badge = "🔵 Trống (Chờ đặt)" if s["status"] == "available" else "🟢 Đã có khách book"
+                        # Xử lý thông tin hiển thị khách đặt ngay tại đây
+                        customer_info_str = ""
+                        if s["status"] == "available":
+                            badge = "🔵 Trống (Chờ đặt)"
+                        else:
+                            badge = "🟢 Đã có khách book"
+                            # Kiểm tra xem slot này tương ứng với khách nào
+                            b_detail = bookings_map.get(s["id"])
+                            if b_detail and b_detail.get("customers"):
+                                c_info = b_detail["customers"]
+                                customer_info_str = f"👤 Khách: **{c_info['full_name']}** - SĐT: `{c_info['phone']}`"
                             
                         with st.container(border=True):
                             c_slot1, c_slot2, c_slot3 = st.columns([3, 2, 1])
+                            
+                            # Cột 1: Hiển thị mốc giờ trọn gói 90 phút
                             c_slot1.markdown(time_display)
+                            if customer_info_str:
+                                c_slot1.markdown(customer_info_str)
+                                
+                            # Cột 2: Hiển thị trạng thái màu sắc
                             c_slot2.markdown(f"Trạng thái: **{badge}**")
                             
+                            # Cột 3: Nút xóa lịch
                             if c_slot3.button("🗑️ Xóa", key=f"del_slot_{s['id']}", type="secondary"):
                                 supabase.table("slots").delete().eq("id", s["id"]).execute()
                                 st.rerun()
@@ -179,7 +206,7 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                     for cust in cust_res.data:
                         st.write(f"• 👤 **{cust['full_name']}** - SĐT: `{cust['phone']}`")
 
-        # ---- TAB 3: XEM LỊCH & ĐIỂM DANH ----
+        # ---- TAB 3: XEM LỊCH & ĐIỂM DANH (CÓ THAM GIA / KHÔNG THAM GIA) ----
         with tab3:
             st.markdown("#### Quản lý danh sách đặt lịch và điểm danh khách đến")
             if supabase:
@@ -218,7 +245,7 @@ if st.session_state.current_role == "Chủ Spa (Admin)":
                                             supabase.table("bookings").update({"status": "no_show"}).eq("id", b["id"]).execute()
                                             st.rerun()
                                             
-                                msg = f"Chào {cust_info['full_name']}, Spa xác nhận lịch hẹn dịch vụ [{b['service_name']}] của bạn vào lúc {zalo_msg_time}. Hẹn gặp bạn nhé!"
+                                msg = f"Chào {cust_info['full_name']}, {TEN_SPA} xác nhận lịch hẹn dịch vụ [{b['service_name']}] của bạn vào lúc {zalo_msg_time}. Hẹn gặp bạn nhé!"
                                 zalo_url = f"https://zalo.me/{cust_info['phone']}"
                                 c3.markdown(f"[💬 Nhắc Zalo]({zalo_url})")
                                 c3.code(msg, language="text")
@@ -238,7 +265,7 @@ else:
             available_slots = slot_res.data if slot_res.data else []
             
             if not available_slots:
-                st.warning("Hiện tại Spa đã kín lịch hoặc chưa mở thêm khung giờ trống mới. Bạn vui lòng quay lại sau nhé!")
+                st.warning(f"Hiện tại {TEN_SPA} đã kín lịch hoặc chưa mở thêm khung giờ trống mới. Bạn vui lòng quay lại sau nhé!")
             else:
                 st.info(f"Spa hiện cung cấp dịch vụ độc quyền: **{DUY_NHAT_SERVICE}**")
                 st.markdown("### 📅 Chọn mốc giờ trống trực tiếp trên bộ lịch tháng")
@@ -287,7 +314,6 @@ else:
 
                 if selected_slot:
                     st_obj = datetime.fromisoformat(selected_slot["start_time"])
-                    # ✨ ĐÃ SỬA LỖI TẠI ĐÂY: Ép giờ kết thúc hiển thị hiển thị chuẩn xác sau 90 phút trọn gói
                     en_obj = st_obj + timedelta(minutes=90)
                     
                     st.write("---")
@@ -305,7 +331,7 @@ else:
                                 check_cust = supabase.table("customers").select("*").eq("phone", input_phone.strip()).execute()
                                 
                                 if not check_cust.data:
-                                    st.error("❌ Số điện thoại này chưa được đăng ký tài khoản tại Spa!")
+                                    st.error(f"❌ Số điện thoại này chưa được đăng ký tài khoản tại {TEN_SPA}!")
                                 else:
                                     info_khach = check_cust.data[0]
                                     
@@ -316,7 +342,8 @@ else:
                                     st.balloons()
                                     st.success(f"🎉 Xin chúc mừng {info_khach['full_name']}! Bạn đã đặt lịch hẹn thành công.")
                                     
-                                    summary_text = f"Lịch hẹn Spa - {DUY_NHAT_SERVICE}"
+                                    # Cập nhật tên thương hiệu mới vào file cấu hình Apple Calendar
+                                    summary_text = f"Lịch hẹn {TEN_SPA} - {DUY_NHAT_SERVICE}"
                                     ics_button_html = generate_ics_download_link(summary_text, st_obj, en_obj)
                                     
                                     st.markdown("👇 Bạn dùng điện thoại iPhone hãy ấn nút dưới đây để lưu lịch nhanh vào máy:")
@@ -326,7 +353,7 @@ else:
 
     # ---- TAB KHÁCH 2: XEM LỊCH SỬ ĐÃ THAM GIA ----
     with tab_cust2:
-        st.markdown("#### Xem lịch sử các buổi làm Spa của bạn")
+        st.markdown(f"#### Xem lịch sử các buổi làm đẹp của bạn tại {TEN_SPA}")
         search_phone = st.text_input("Nhập số điện thoại tài khoản của bạn để tra cứu lịch sử:", key="history_phone_input")
         btn_search = st.button("Tra cứu ngay", type="primary")
         
@@ -340,12 +367,12 @@ else:
                     st.error("❌ Số điện thoại này không tồn tại trên hệ thống!")
                 else:
                     user_info = check_user.data[0]
-                    st.success(f"Chào **{user_info['full_name']}**, dưới đây là danh sách các buổi bạn đã tham gia làm đẹp tại Spa:")
+                    st.success(f"Chào **{user_info['full_name']}**, dưới đây là danh sách các buổi bạn đã tham gia làm đẹp tại {TEN_SPA}:")
                     
                     history_res = supabase.table("bookings").select("*, slots(*)").eq("customer_id", user_info["id"]).eq("status", "completed").execute()
                     
                     if not history_res.data:
-                        st.info("Nhật ký hệ thống: Bạn chưa có buổi làm Spa nào được ghi nhận hoàn thành (Đã tham gia).")
+                        st.info("Nhật ký hệ thống: Bạn chưa có buổi làm dịch vụ nào được ghi nhận hoàn thành (Đã tham gia).")
                     else:
                         for idx, h in enumerate(history_res.data):
                             slot_h = h.get("slots")
