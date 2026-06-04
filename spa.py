@@ -58,7 +58,7 @@ END:VCALENDAR"""
     return href
 
 # --- THANH MENU ĐIỀU HƯỚNG TRÊN CÙNG TRANG WEB ---
-st.markdown("### 🌟 HỆ THỐNG ĐẶT LỊCH VÀ QUẢN LÝ PRIVATE SPA")
+st.markdown("### 🌟 La Maison Beauté")
 col_menu1, col_menu2 = st.columns(2)
 
 with col_menu1:
