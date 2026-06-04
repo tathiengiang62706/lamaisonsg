@@ -27,6 +27,7 @@ supabase: Client = init_supabase()
 
 st.set_page_config(page_title="La Maison Beauté - Booking System", layout="wide")
 
+# Khởi tạo trạng thái bộ nhớ hệ thống
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "editing_customer_id" not in st.session_state:
@@ -67,7 +68,7 @@ is_admin_route = query_params.get("page") == "admin"
 
 
 # =========================================================================
-# LUỒNG 1: GIAO DIỆN CHỦ SPA (BÍ MẬT - QUẢN LÝ ĐỊA CHỈ KHÁCH HÀNG THÔNG MINH)
+# LUỒNG 1: GIAO DIỆN CHỦ SPA (BÍ MẬT - QUẢN LÝ ĐA CHỨC NĂNG SỬA/XÓA AN TOÀN)
 # =========================================================================
 if is_admin_route:
     st.markdown(f"<h2 style='color: #af9444; font-family: \"Playfair Display\", serif;'>💆‍♂️ HỆ THỐNG QUẢN TRỊ NỘI BỘ - {TEN_SPA.upper()}</h2>", unsafe_allow_html=True)
@@ -147,11 +148,13 @@ if is_admin_route:
                             c_slot1.markdown(time_display)
                             if customer_info_str: c_slot1.markdown(customer_info_str)
                             c_slot2.markdown(f"Trạng thái: **{badge}**")
+                            
+                            # Sửa đổi nút xóa lịch: Tự động dọn dẹp lịch đặt tương ứng nhờ CASCADE bên database
                             if c_slot3.button("🗑️ Xóa", key=f"del_slot_{s['id']}", type="secondary"):
                                 supabase.table("slots").delete().eq("id", s["id"]).execute()
                                 st.rerun()
 
-        # ---- TAB 2: QUẢN LÝ KHÁCH HÀNG (ĐÃ ĐỒNG BỘ DROP DOWN CHO PHẦN SỬA ĐỊA CHỈ) ----
+        # ---- TAB 2: QUẢN LÝ TÀI KHOẢN KHÁCH HÀNG (HOÀN THIỆN DROP DOWN SỬA/XÓA) ----
         with tab2:
             st.markdown("### ➕ Tạo tài khoản mới cho khách hàng")
             with st.container(border=True):
@@ -191,7 +194,7 @@ if is_admin_route:
                 if not customers_list:
                     st.info("Hiện chưa có tài khoản khách hàng nào.")
                 else:
-                    # GIAO DIỆN SỬA THÔNG TIN KHÁCH HÀNG (ĐÃ NÂNG CẤP MENU DROPDOWN ĐỊA CHỈ)
+                    # GIAO DIỆN SỬA ĐỊA CHỈ KHÁCH HÀNG ĐỒNG BỘ DROP DOWN CAO CẤP
                     if st.session_state.editing_customer_id:
                         current_edit_id = st.session_state.editing_customer_id
                         edit_cust = next((c for c in customers_list if c["id"] == current_edit_id), None)
@@ -202,11 +205,10 @@ if is_admin_route:
                                 new_name = st.text_input("Sửa Họ và Tên:", value=edit_cust["full_name"])
                                 new_phone = st.text_input("Sửa Số điện thoại:", value=edit_cust["phone"])
                                 
-                                # Xác định xem địa chỉ cũ của khách có nằm trong danh sách TP.HCM không
+                                # Tự động phát hiện địa chỉ cũ của khách có thuộc TP.HCM hay không
                                 current_addr = edit_cust.get("address", "")
                                 is_hcm_addr = current_addr in DANH_SACH_QUAN_HCM
                                 
-                                # Tạo lựa chọn loại khu vực khi sửa
                                 edit_region_index = 0 if is_hcm_addr else 1
                                 edit_region = st.radio(
                                     "Sửa khu vực sinh sống:", 
@@ -217,11 +219,9 @@ if is_admin_route:
                                 )
                                 
                                 if edit_region == "📍 Thuộc TP. Hồ Chí Minh (Mặc định chọn nhanh)":
-                                    # Nếu địa chỉ cũ đúng là một quận thuộc HCM, cho chọn làm mặc định, ngược lại chọn Quận 1
                                     default_hcm_idx = DANH_SACH_QUAN_HCM.index(current_addr) if is_hcm_addr else 0
                                     new_addr_val = st.selectbox("Chọn quận/huyện tại TP.HCM:", DANH_SACH_QUAN_HCM, index=default_hcm_idx, key="edit_address_hcm")
                                 else:
-                                    # Nếu trước đó đang chọn HCM mà bấm chuyển sang Tỉnh khác, ô chữ sẽ rỗng, ngược lại giữ nguyên địa chỉ tỉnh cũ
                                     default_other_val = "" if is_hcm_addr else current_addr
                                     new_addr_val = st.text_input("Sửa tên Tỉnh/Thành phố của khách ở xa:", value=default_other_val, key="edit_address_other")
                                 
@@ -245,7 +245,7 @@ if is_admin_route:
                                     st.rerun()
                             st.write("---")
 
-                    # Vòng lặp hiển thị danh sách khách hàng
+                    # Vòng lặp hiển thị danh sách khách hàng hoạt động an toàn
                     for cust in customers_list:
                         with st.container(border=True):
                             c_col1, c_col2, c_col3 = st.columns([3, 1, 1])
@@ -260,6 +260,7 @@ if is_admin_route:
                                 st.session_state.editing_customer_id = cust["id"]
                                 st.rerun()
                                 
+                            # Nút Xóa khách hàng: Hoạt động trơn tru nhờ lệnh CASCADE SQL ở Bước 1
                             if c_col3.button("🗑️ Xóa", key=f"del_cust_{cust['id']}", type="secondary", use_container_width=True):
                                 supabase.table("customers").delete().eq("id", cust["id"]).execute()
                                 st.toast(f"❌ Đã xóa tài khoản khách: {cust['full_name']}")
