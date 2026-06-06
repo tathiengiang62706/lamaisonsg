@@ -64,7 +64,7 @@ if st.query_params.get("page") == "admin":
     st.session_state.is_admin_mode = True
 
 # =========================================================================
-# LUỒNG 1: GIAO DIỆN CHỦ SPA
+# LUỒNG 1: GIAO DIỆN CHỦ SPA (THÊM TAB QUẢN LÝ THU CHI MỚI)
 # =========================================================================
 if st.session_state.is_admin_mode:
     st.markdown(f"<h2 style='color: #af9444; font-family: \"Playfair Display\", serif;'>💆‍♂️ HỆ THỐNG QUẢN TRỊ NỘI BỘ - {TEN_SPA.upper()}</h2>", unsafe_allow_html=True)
@@ -89,7 +89,8 @@ if st.session_state.is_admin_mode:
             st.query_params.clear()
             st.rerun()
             
-        tab1, tab2, tab3 = st.tabs(["➕ Tạo & Xóa Lịch Trống", "👤 Quản Lý Khách Hàng", "📋 Quản Lý Đặt Lịch"])
+        # Nâng cấp lên 4 Tabs
+        tab1, tab2, tab3, tab4 = st.tabs(["📅 Lịch Trống", "👤 Khách Hàng", "📋 Lịch Hẹn", "💰 Quản Lý Thu Chi"])
         
         # ---- TAB 1: QUẢN LÝ LỊCH TRỐNG ----
         with tab1:
@@ -193,7 +194,6 @@ if st.session_state.is_admin_mode:
                 if not customers_list:
                     st.info("Hiện chưa có tài khoản khách hàng nào.")
                 else:
-                    # GIAO DIỆN SỬA ĐỊA CHỈ KHÁCH HÀNG 
                     if st.session_state.editing_customer_id:
                         current_edit_id = st.session_state.editing_customer_id
                         edit_cust = next((c for c in customers_list if c["id"] == current_edit_id), None)
@@ -242,7 +242,6 @@ if st.session_state.is_admin_mode:
                                 st.rerun()
                             st.write("---")
 
-                    # Vòng lặp hiển thị danh sách khách hàng
                     for cust in customers_list:
                         with st.container(border=True):
                             c_col1, c_col2, c_col3 = st.columns([3, 1, 1])
@@ -296,6 +295,98 @@ if st.session_state.is_admin_mode:
                                 msg = f"Chào {cust_info['full_name']}, {TEN_SPA} xác nhận lịch hẹn dịch vụ [{b['service_name']}] của bạn vào lúc {zalo_msg_time}. Hẹn gặp bạn nhé!"
                                 c3.markdown(f"[💬 Nhắc Zalo](https://zalo.me/{cust_info['phone']})")
                                 c3.code(msg, language="text")
+
+        # ---- TAB 4: QUẢN LÝ THU CHI (TÍNH NĂNG MỚI) ----
+        with tab4:
+            st.markdown("### 💸 Sổ Thu Chi Spa")
+            
+            with st.container(border=True):
+                st.markdown("#### ➕ Thêm giao dịch mới")
+                
+                t_type = st.radio("Loại giao dịch:", ["Thu nhập (Cộng tiền)", "Khoản chi (Trừ tiền)"], horizontal=True)
+                t_date = st.date_input("Ngày giao dịch:", datetime.today())
+                
+                # Ô nhập tiền
+                t_amount = st.number_input("Số tiền (VNĐ):", min_value=0, step=10000, format="%d")
+                
+                # Ô mô tả
+                if t_type == "Thu nhập (Cộng tiền)":
+                    t_desc = st.text_input("Mô tả khoản thu:", placeholder="VD: Khách làm mặt chăm sóc chuyên sâu...")
+                else:
+                    t_desc = st.text_input("Mô tả khoản chi:", placeholder="VD: Mua nước hoa, trái cây, mỹ phẩm...")
+                
+                # Hiện Dropdown chọn nguồn mua (Chỉ hiện khi là Khoản Chi)
+                t_source = "Khác"
+                if t_type == "Khoản chi (Trừ tiền)":
+                    t_source = st.selectbox("Nguồn mua hàng:", ["Shopee", "Tiktok Shop", "Khác"])
+                
+                if st.button("Lưu giao dịch", type="primary", use_container_width=True):
+                    if t_amount <= 0:
+                        st.error("Số tiền phải lớn hơn 0!")
+                    elif not t_desc.strip():
+                        st.error("Vui lòng nhập mô tả giao dịch!")
+                    else:
+                        db_type = "Thu" if t_type == "Thu nhập (Cộng tiền)" else "Chi"
+                        trans_data = {
+                            "trans_date": t_date.isoformat(),
+                            "trans_type": db_type,
+                            "amount": t_amount,
+                            "description": t_desc.strip(),
+                            "source": t_source if db_type == "Chi" else ""
+                        }
+                        if supabase:
+                            supabase.table("transactions").insert(trans_data).execute()
+                            st.success("✅ Đã lưu giao dịch thành công vào sổ cái!")
+                            st.rerun()
+
+            st.write("---")
+            st.markdown("#### 📊 Thống kê & Lịch sử dòng tiền")
+            
+            if supabase:
+                # Tải tất cả giao dịch, sắp xếp mới nhất lên đầu
+                trans_res = supabase.table("transactions").select("*").order("trans_date", descending=True).order("created_at", descending=True).execute()
+                transactions = trans_res.data if trans_res.data else []
+                
+                if not transactions:
+                    st.info("Chưa có dòng tiền nào được ghi nhận.")
+                else:
+                    tong_thu = sum(t["amount"] for t in transactions if t["trans_type"] == "Thu")
+                    tong_chi = sum(t["amount"] for t in transactions if t["trans_type"] == "Chi")
+                    loi_nhuan = tong_thu - tong_chi
+                    
+                    # Cột thống kê màu mè, đẹp mắt
+                    col_st1, col_st2, col_st3 = st.columns(3)
+                    with col_st1:
+                        st.markdown(f"<div style='background-color:#e8f5e9; padding:20px; border-radius:10px; text-align:center;'><h3 style='color:#2e7d32; margin:0;'>💰 Tổng Thu</h3><h2 style='color:#1b5e20; margin:0;'>{tong_thu:,.0f} đ</h2></div>", unsafe_allow_html=True)
+                    with col_st2:
+                        st.markdown(f"<div style='background-color:#ffebee; padding:20px; border-radius:10px; text-align:center;'><h3 style='color:#c62828; margin:0;'>💸 Tổng Chi</h3><h2 style='color:#b71c1c; margin:0;'>{tong_chi:,.0f} đ</h2></div>", unsafe_allow_html=True)
+                    with col_st3:
+                        ln_color = "#1565c0" if loi_nhuan >= 0 else "#c62828"
+                        ln_bg = "#e3f2fd" if loi_nhuan >= 0 else "#ffcdd2"
+                        st.markdown(f"<div style='background-color:{ln_bg}; padding:20px; border-radius:10px; text-align:center;'><h3 style='color:{ln_color}; margin:0;'>✨ Lợi Nhuận</h3><h2 style='color:{ln_color}; margin:0;'>{loi_nhuan:,.0f} đ</h2></div>", unsafe_allow_html=True)
+                    
+                    st.write("")
+                    st.write("**Lịch sử chi tiết:**")
+                    for t in transactions:
+                        with st.container(border=True):
+                            c1, c2, c3 = st.columns([4, 2, 1])
+                            
+                            icon = "🟩 **THU**" if t["trans_type"] == "Thu" else "🟥 **CHI**"
+                            color = "green" if t["trans_type"] == "Thu" else "red"
+                            
+                            date_str = datetime.fromisoformat(t["trans_date"]).strftime("%d/%m/%Y")
+                            
+                            desc_text = f"{t['description']}"
+                            # Nếu là khoản chi thì in ra nguồn mua hàng
+                            if t["trans_type"] == "Chi" and t.get("source"):
+                                desc_text += f" *(Mua từ: {t['source']})*"
+                                
+                            c1.markdown(f"{icon} | 📅 Ngày: {date_str} | {desc_text}")
+                            c2.markdown(f"<h4 style='color: {color}; margin:0;'>{t['amount']:,.0f} đ</h4>", unsafe_allow_html=True)
+                            
+                            if c3.button("🗑️ Xóa", key=f"del_trans_{t['id']}", type="secondary"):
+                                supabase.table("transactions").delete().eq("id", t["id"]).execute()
+                                st.rerun()
 
 # =========================================================================
 # LUỒNG 2: GIAO DIỆN KHÁCH HÀNG
