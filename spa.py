@@ -64,7 +64,7 @@ if st.query_params.get("page") == "admin":
     st.session_state.is_admin_mode = True
 
 # =========================================================================
-# LUỒNG 1: GIAO DIỆN CHỦ SPA (THÊM TAB QUẢN LÝ THU CHI MỚI)
+# LUỒNG 1: GIAO DIỆN CHỦ SPA
 # =========================================================================
 if st.session_state.is_admin_mode:
     st.markdown(f"<h2 style='color: #af9444; font-family: \"Playfair Display\", serif;'>💆‍♂️ HỆ THỐNG QUẢN TRỊ NỘI BỘ - {TEN_SPA.upper()}</h2>", unsafe_allow_html=True)
@@ -89,7 +89,6 @@ if st.session_state.is_admin_mode:
             st.query_params.clear()
             st.rerun()
             
-        # Nâng cấp lên 4 Tabs
         tab1, tab2, tab3, tab4 = st.tabs(["📅 Lịch Trống", "👤 Khách Hàng", "📋 Lịch Hẹn", "💰 Quản Lý Thu Chi"])
         
         # ---- TAB 1: QUẢN LÝ LỊCH TRỐNG ----
@@ -296,7 +295,7 @@ if st.session_state.is_admin_mode:
                                 c3.markdown(f"[💬 Nhắc Zalo](https://zalo.me/{cust_info['phone']})")
                                 c3.code(msg, language="text")
 
-        # ---- TAB 4: QUẢN LÝ THU CHI (TÍNH NĂNG MỚI) ----
+        # ---- TAB 4: QUẢN LÝ THU CHI ----
         with tab4:
             st.markdown("### 💸 Sổ Thu Chi Spa")
             
@@ -306,16 +305,13 @@ if st.session_state.is_admin_mode:
                 t_type = st.radio("Loại giao dịch:", ["Thu nhập (Cộng tiền)", "Khoản chi (Trừ tiền)"], horizontal=True)
                 t_date = st.date_input("Ngày giao dịch:", datetime.today())
                 
-                # Ô nhập tiền
                 t_amount = st.number_input("Số tiền (VNĐ):", min_value=0, step=10000, format="%d")
                 
-                # Ô mô tả
                 if t_type == "Thu nhập (Cộng tiền)":
                     t_desc = st.text_input("Mô tả khoản thu:", placeholder="VD: Khách làm mặt chăm sóc chuyên sâu...")
                 else:
                     t_desc = st.text_input("Mô tả khoản chi:", placeholder="VD: Mua nước hoa, trái cây, mỹ phẩm...")
                 
-                # Hiện Dropdown chọn nguồn mua (Chỉ hiện khi là Khoản Chi)
                 t_source = "Khác"
                 if t_type == "Khoản chi (Trừ tiền)":
                     t_source = st.selectbox("Nguồn mua hàng:", ["Shopee", "Tiktok Shop", "Khác"])
@@ -343,8 +339,8 @@ if st.session_state.is_admin_mode:
             st.markdown("#### 📊 Thống kê & Lịch sử dòng tiền")
             
             if supabase:
-                # Tải tất cả giao dịch, sắp xếp mới nhất lên đầu
-                trans_res = supabase.table("transactions").select("*").order("trans_date", descending=True).order("created_at", descending=True).execute()
+                # ✨ ĐÃ SỬA LỖI TẠI ĐÂY: Thay chữ descending=True bằng desc=True để tương thích với Supabase mới
+                trans_res = supabase.table("transactions").select("*").order("trans_date", desc=True).order("created_at", desc=True).execute()
                 transactions = trans_res.data if trans_res.data else []
                 
                 if not transactions:
@@ -354,7 +350,6 @@ if st.session_state.is_admin_mode:
                     tong_chi = sum(t["amount"] for t in transactions if t["trans_type"] == "Chi")
                     loi_nhuan = tong_thu - tong_chi
                     
-                    # Cột thống kê màu mè, đẹp mắt
                     col_st1, col_st2, col_st3 = st.columns(3)
                     with col_st1:
                         st.markdown(f"<div style='background-color:#e8f5e9; padding:20px; border-radius:10px; text-align:center;'><h3 style='color:#2e7d32; margin:0;'>💰 Tổng Thu</h3><h2 style='color:#1b5e20; margin:0;'>{tong_thu:,.0f} đ</h2></div>", unsafe_allow_html=True)
@@ -377,7 +372,6 @@ if st.session_state.is_admin_mode:
                             date_str = datetime.fromisoformat(t["trans_date"]).strftime("%d/%m/%Y")
                             
                             desc_text = f"{t['description']}"
-                            # Nếu là khoản chi thì in ra nguồn mua hàng
                             if t["trans_type"] == "Chi" and t.get("source"):
                                 desc_text += f" *(Mua từ: {t['source']})*"
                                 
