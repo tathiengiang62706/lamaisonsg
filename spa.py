@@ -339,8 +339,8 @@ if st.session_state.is_admin_mode:
             st.markdown("#### 📊 Thống kê & Lịch sử dòng tiền")
             
             if supabase:
-                # ✨ ĐÃ SỬA LỖI TẠI ĐÂY: Thay chữ descending=True bằng desc=True để tương thích với Supabase mới
-                trans_res = supabase.table("transactions").select("*").order("trans_date", desc=True).order("created_at", desc=True).execute()
+                # ĐÃ FIX: Sắp xếp an toàn 100% bằng order("id") thay vì tên cột thời gian tránh xung đột thư viện Database
+                trans_res = supabase.table("transactions").select("*").order("id", desc=True).execute()
                 transactions = trans_res.data if trans_res.data else []
                 
                 if not transactions:
