@@ -49,12 +49,16 @@ DANH_SACH_QUAN_HCM = [
     "Huyện Hóc Môn, TP. HCM", "Huyện Nhà Bè, TP. HCM"
 ]
 
-# 📅 HÀM SINH FILE LỊCH IPHONE - ĐÃ NÂNG CẤP 2 MỐC BÁO THỨC CHỐNG QUÊN LỊCH
+# 📅 HÀM SINH FILE LỊCH IPHONE - ĐÃ FIX TRIỆT ĐỂ LỖI LỆCH 7 TIẾNG
 def generate_ics_download_link(summary, start_dt, end_dt):
-    s_str = start_dt.strftime("%Y%m%dT%H%M%SZ")
-    e_str = end_dt.strftime("%Y%m%dT%H%M%SZ")
+    # ✨ ĐÃ SỬA: Trừ đi 7 tiếng để quy đổi giờ Việt Nam về giờ chuẩn quốc tế UTC trước khi đóng đuôi "Z"
+    start_utc = start_dt - timedelta(hours=7)
+    end_utc = end_dt - timedelta(hours=7)
     
-    # Logic tính toán mốc báo lúc 8:00 sáng ngày hẹn
+    s_str = start_utc.strftime("%Y%m%dT%H%M%SZ")
+    e_str = end_utc.strftime("%Y%m%dT%H%M%SZ")
+    
+    # Logic tính toán mốc báo lúc 8:00 sáng ngày hẹn (giữ nguyên mốc giờ địa phương để tính khoảng cách reo chuông)
     target_8am = start_dt.replace(hour=8, minute=0, second=0, microsecond=0)
     diff_seconds = int((start_dt - target_8am).total_seconds())
     
@@ -63,7 +67,6 @@ def generate_ics_download_link(summary, start_dt, end_dt):
         minutes = (diff_seconds % 3600) // 60
         trigger_8am = f"-PT{hours}H{minutes}M" if minutes > 0 else f"-PT{hours}H"
     else:
-        # Nếu lịch hẹn diễn ra sớm trước hoặc đúng 8h sáng, chuông sẽ reo trước giờ hẹn 0 phút
         trigger_8am = "-PT0M"
         
     ics_content = f"""BEGIN:VCALENDAR
