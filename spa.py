@@ -49,10 +49,45 @@ DANH_SACH_QUAN_HCM = [
     "Huyện Hóc Môn, TP. HCM", "Huyện Nhà Bè, TP. HCM"
 ]
 
+# 📅 HÀM SINH FILE LỊCH IPHONE - ĐÃ NÂNG CẤP 2 MỐC BÁO THỨC CHỐNG QUÊN LỊCH
 def generate_ics_download_link(summary, start_dt, end_dt):
     s_str = start_dt.strftime("%Y%m%dT%H%M%SZ")
     e_str = end_dt.strftime("%Y%m%dT%H%M%SZ")
-    ics_content = f"BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//{TEN_SPA}//NONSGML Event//EN\nBEGIN:VEVENT\nSUMMARY:{summary}\nDTSTART:{s_str}\nDTEND:{e_str}\nDESCRIPTION:Hẹn gặp bạn tại {TEN_SPA}!\nSTATUS:CONFIRMED\nEND:VEVENT\nEND:VCALENDAR"
+    
+    # Logic tính toán mốc báo lúc 8:00 sáng ngày hẹn
+    target_8am = start_dt.replace(hour=8, minute=0, second=0, microsecond=0)
+    diff_seconds = int((start_dt - target_8am).total_seconds())
+    
+    if diff_seconds > 0:
+        hours = diff_seconds // 3600
+        minutes = (diff_seconds % 3600) // 60
+        trigger_8am = f"-PT{hours}H{minutes}M" if minutes > 0 else f"-PT{hours}H"
+    else:
+        # Nếu lịch hẹn diễn ra sớm trước hoặc đúng 8h sáng, chuông sẽ reo trước giờ hẹn 0 phút
+        trigger_8am = "-PT0M"
+        
+    ics_content = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//{TEN_SPA}//NONSGML Event//EN
+BEGIN:VEVENT
+SUMMARY:{summary}
+DTSTART:{s_str}
+DTEND:{e_str}
+DESCRIPTION:Hẹn gặp bạn tại {TEN_SPA}!
+STATUS:CONFIRMED
+BEGIN:VALARM
+TRIGGER:-PT30M
+ACTION:DISPLAY
+DESCRIPTION:Nhắc lịch: Khung giờ hẹn làm đẹp tại La Maison Beauté sẽ bắt đầu sau 30 phút nữa.
+END:VALARM
+BEGIN:VALARM
+TRIGGER:{trigger_8am}
+ACTION:DISPLAY
+DESCRIPTION:Chào buổi sáng! Bạn có lịch hẹn chăm sóc da tại La Maison Beauté vào ngày hôm nay.
+END:VALARM
+END:VEVENT
+END:VCALENDAR"""
+    
     b64 = base64.b64encode(ics_content.encode('utf-8')).decode()
     href = f'<a href="data:text/calendar;charset=utf-8;base64,{b64}" download="lich_hen_spa.ics" style="display: inline-block; padding: 12px 24px; background-color: #D4AF37; color: white; text-decoration: none; border-radius: 50px; font-weight: bold; margin-top: 10px; box-shadow: 0 4px 15px rgba(212,175,55,0.3);">📅 Thêm Vào Lịch iPhone (Apple Calendar)</a>'
     return href
@@ -339,7 +374,6 @@ if st.session_state.is_admin_mode:
             st.markdown("#### 📊 Thống kê & Lịch sử dòng tiền")
             
             if supabase:
-                # ĐÃ FIX: Sắp xếp an toàn 100% bằng order("id") thay vì tên cột thời gian tránh xung đột thư viện Database
                 trans_res = supabase.table("transactions").select("*").order("id", desc=True).execute()
                 transactions = trans_res.data if trans_res.data else []
                 
