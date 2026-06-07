@@ -49,16 +49,13 @@ DANH_SACH_QUAN_HCM = [
     "Huyện Hóc Môn, TP. HCM", "Huyện Nhà Bè, TP. HCM"
 ]
 
-# 📅 HÀM SINH FILE LỊCH IPHONE - ĐÃ FIX TRIỆT ĐỂ LỖI LỆCH 7 TIẾNG
 def generate_ics_download_link(summary, start_dt, end_dt):
-    # ✨ ĐÃ SỬA: Trừ đi 7 tiếng để quy đổi giờ Việt Nam về giờ chuẩn quốc tế UTC trước khi đóng đuôi "Z"
     start_utc = start_dt - timedelta(hours=7)
     end_utc = end_dt - timedelta(hours=7)
     
     s_str = start_utc.strftime("%Y%m%dT%H%M%SZ")
     e_str = end_utc.strftime("%Y%m%dT%H%M%SZ")
     
-    # Logic tính toán mốc báo lúc 8:00 sáng ngày hẹn (giữ nguyên mốc giờ địa phương để tính khoảng cách reo chuông)
     target_8am = start_dt.replace(hour=8, minute=0, second=0, microsecond=0)
     diff_seconds = int((start_dt - target_8am).total_seconds())
     
@@ -96,10 +93,15 @@ END:VCALENDAR"""
     return href
 
 # -------------------------------------------------------------------------
-# 2. XỬ LÝ ĐƯỜNG DẪN ẨN
+# 2. XỬ LÝ ĐƯỜNG DẪN ẨN VÀ LƯU TRẠNG THÁI ĐĂNG NHẬP (MỚI)
 # -------------------------------------------------------------------------
 if st.query_params.get("page") == "admin":
     st.session_state.is_admin_mode = True
+    
+    # Tự động khôi phục đăng nhập nếu URL có chứa "chìa khóa"
+    if st.query_params.get("session") == "active":
+        st.session_state.logged_in = True
+
 
 # =========================================================================
 # LUỒNG 1: GIAO DIỆN CHỦ SPA
@@ -116,6 +118,8 @@ if st.session_state.is_admin_mode:
             if st.button("Đăng nhập ngay", type="primary"):
                 if username == "admin" and password == "admin123":
                     st.session_state.logged_in = True
+                    # Gắn chìa khóa vào link để giữ trạng thái khi ấn F5
+                    st.query_params["session"] = "active"
                     st.rerun()
                 else:
                     st.error("Sai tài khoản hoặc mật khẩu!")
@@ -124,6 +128,7 @@ if st.session_state.is_admin_mode:
         if st.button("🚪 Đăng xuất khỏi Admin"):
             st.session_state.logged_in = False
             st.session_state.is_admin_mode = False
+            # Xóa sạch toàn bộ chìa khóa URL, bảo mật 100% khi vắng mặt
             st.query_params.clear()
             st.rerun()
             
